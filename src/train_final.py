@@ -37,14 +37,26 @@ TEST_FRAMES_PER_VIDEO = 120   # more frames per clip -> lower-variance clip scor
 SEED = 42
 
 
-def load_all(frames_per_video: int, test_frames: int) -> dict:
+def load_all(frames_per_video: int, test_frames: int, temporal: bool = False) -> dict:
     rng = np.random.default_rng(SEED)
     tr_p, y_tr, _, vid_tr = T.sample_by_video("Train", frames_per_video, rng, video_subset="all")
     te_p, y_te, grp_te, vid_te = T.sample_by_video("Test", test_frames, rng)
+    # Clip-level labels stay as the source video's class: a theft clip is a theft
+    # clip even where the refined mask says a given frame is quiet. Aggregation and
+    # threshold selection use these; only the CNN/SVM see the refined frame labels.
+    y_clip = y_tr.copy()
+    if temporal:
+        import temporal_labels
+        before = int(y_tr.sum())
+        y_tr, flipped = temporal_labels.refine(tr_p, y_tr)
+        print(f"  temporal labels: {flipped} train frames relabelled, "
+              f"anomaly frames {before} -> {int(y_tr.sum())} "
+              f"(Test left untouched)", flush=True)
     print(f"  train frames={len(y_tr)} videos={len(set(vid_tr))} | "
           f"test frames={len(y_te)} clips={len(set(vid_te))}", flush=True)
     return {
         "train": (E._load(tr_p, False), y_tr, vid_tr),
+        "train_clip_labels": y_clip,
         "test": (E._load(te_p, False), y_te, vid_te, grp_te),
     }
 
@@ -92,13 +104,16 @@ def main() -> None:
     ap.add_argument("--frames", type=int, default=FRAMES_PER_VIDEO)
     ap.add_argument("--with-dataset2", action="store_true",
                     help="mix dataset-2 into training and report cross-source transfer")
+    ap.add_argument("--temporal-labels", action="store_true",
+                    help="use dataset-4's temporal masks as true per-frame Train labels")
     args = ap.parse_args()
 
     torch.set_num_threads(max(1, (os.cpu_count() or 4) - 1))
     t0 = time.time()
     print("[1/4] loading frames ...", flush=True)
-    data_all = load_all(args.frames, TEST_FRAMES_PER_VIDEO)
+    data_all = load_all(args.frames, TEST_FRAMES_PER_VIDEO, args.temporal_labels)
     x_all, y_all, vid_all = data_all["train"]
+    yc_all = data_all["train_clip_labels"]
     x_te, y_te, vid_te, grp_te = data_all["test"]
 
     d2_hold = ("not_shoplifting4", "shoplifting4")   # one clip per class, never trained on
@@ -106,6 +121,7 @@ def main() -> None:
         d2x, d2y, d2v, hx, hy, hv = load_dataset2(d2_hold)
         x_all = np.concatenate([x_all, d2x])
         y_all = np.concatenate([y_all, d2y])
+        yc_all = np.concatenate([yc_all, d2y])
         vid_all = list(vid_all) + d2v
         print(f"  + dataset-2: {len(d2y)} frames from {len(set(d2v))} videos "
               f"(holdout {d2_hold}: {len(hy)} frames)", flush=True)
@@ -135,7 +151,7 @@ def main() -> None:
         fit["model"] = model
         fits.append(fit)
         test_margins.append(fit["test_margins"])
-        val_pool.append(([vid_all[i] for i in val_idx], y_all[val_idx], fit["val_margins"]))
+        val_pool.append(([vid_all[i] for i in val_idx], yc_all[val_idx], fit["val_margins"]))
         solo_lab, solo_sc = E.aggregate(vid_te, y_te, fit["test_margins"], "mean")
         ens_lab, ens_sc = E.aggregate(vid_te, y_te, np.mean(test_margins, axis=0), "mean")
         print(f"      cnn_val={cnn_acc:.4f} svm_val={fit['svm_val_acc']:.4f} "
