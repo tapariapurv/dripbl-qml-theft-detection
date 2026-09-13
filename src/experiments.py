@@ -217,21 +217,37 @@ def train_cnn(cfg: Config, seed: int, data: dict) -> tuple[nn.Module, float]:
     loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(counts.sum() / (2 * counts), dtype=torch.float32))
     y_t = torch.from_numpy(y_tr).long()
 
-    best_acc, best_state = -1.0, None
+    n_batches = int(np.ceil(len(y_tr) / T.BATCH_SIZE))
+    print(f"        training CNN: {len(y_tr)} frames, {n_batches} batches/epoch, "
+          f"class counts normal={int(counts[0])} anomaly={int(counts[1])}", flush=True)
+
+    best_acc, best_state, t_start = -1.0, None, time.time()
     for epoch in range(cfg.epochs):
         model.train()
         order = rng.permutation(len(y_tr))
-        for start in range(0, len(order), T.BATCH_SIZE):
+        running, t_ep = 0.0, time.time()
+        for b, start in enumerate(range(0, len(order), T.BATCH_SIZE)):
             idx = order[start:start + T.BATCH_SIZE]
             loss = loss_fn(model(_tensor(np.ascontiguousarray(_augment(x_tr[idx], rng, cfg)))), y_t[idx])
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
             sched.step()
+            running += float(loss)
+            if b % 10 == 0 or b == n_batches - 1:
+                done = (b + 1) / n_batches
+                eta = (time.time() - t_ep) / done * (1 - done)
+                print(f"\r        epoch {epoch + 1}/{cfg.epochs} [{'#' * int(done * 24):<24}] "
+                      f"{done * 100:5.1f}%  loss={running / (b + 1):.4f}  "
+                      f"lr={sched.get_last_lr()[0]:.2e}  eta {eta:4.0f}s", end="", flush=True)
         acc = float((_forward(model, x_va).argmax(1) == y_va).mean())
+        flag = ""
         if acc >= best_acc:
             best_acc, best_state = acc, {k: v.clone() for k, v in model.state_dict().items()}
-        print(f"        epoch {epoch + 1}/{cfg.epochs} val_acc={acc:.4f}", flush=True)
+            flag = "  <- best"
+        print(f"\r        epoch {epoch + 1}/{cfg.epochs} done in {time.time() - t_ep:.0f}s  "
+              f"loss={running / n_batches:.4f}  val_acc={acc:.4f}{flag}" + " " * 20, flush=True)
+    print(f"        CNN finished in {time.time() - t_start:.0f}s, best val_acc={best_acc:.4f}", flush=True)
     model.load_state_dict(best_state)
     return model, best_acc
 
@@ -346,12 +362,18 @@ def fit_qsvm(cfg: Config, model: nn.Module, data: dict, rng: np.random.Generator
         pick = np.concatenate([pos, neg])
     else:
         pick = rng.permutation(len(y_tr))[:cfg.svm_fit_per_label * 2]
+    t_q = time.time()
+    print(f"        embedding latents: {len(pick)} fit / {len(y_va)} val / {len(x_te)} test frames",
+          flush=True)
     lat_fit, y_fit = _forward(model, x_tr[pick], backbone=True), y_tr[pick]
     lat_val, lat_test = _forward(model, x_va, backbone=True), _forward(model, x_te, backbone=True)
 
     projectors = {m: PCAAngleProjector(n_components=FEATURE_DIM, mode=m).fit(lat_fit, y_fit)
                   for m in ("pca", "pls")}
-    best = (-1.0, None, None, None)
+    n_cfg = 2 * len(T.ANGLE_SCALES) * len(T.C_GRID)
+    print(f"        quantum-kernel sweep: 2 projectors x {len(T.ANGLE_SCALES)} angle scales "
+          f"x {len(T.C_GRID)} C values = {n_cfg} SVCs", flush=True)
+    best, seen = (-1.0, None, None, None), 0
     for mode, proj in projectors.items():
         for scale in T.ANGLE_SCALES:
             proj.angle_scale = scale
@@ -360,9 +382,16 @@ def fit_qsvm(cfg: Config, model: nn.Module, data: dict, rng: np.random.Generator
             for c in T.C_GRID:
                 svc = SVC(kernel="precomputed", C=c, class_weight="balanced").fit(k_fit, y_fit)
                 acc = balanced_accuracy_score(y_va, svc.predict(k_val))
+                seen += 1
+                mark = ""
                 if acc > best[0]:
                     best = (float(acc), mode, scale, c)
+                    mark = "  <- best"
+                print(f"\r          [{seen:3d}/{n_cfg}] {mode} scale={scale:<5} C={c:<6} "
+                      f"val_bal_acc={acc:.4f}{mark}", end="\n" if mark else "", flush=True)
     val_acc, mode, scale, c = best
+    print(f"\r        sweep done in {time.time() - t_q:.0f}s -> {mode} scale={scale} C={c} "
+          f"val_bal_acc={val_acc:.4f}" + " " * 20, flush=True)
     proj = projectors[mode]
     proj.angle_scale = scale
     x_fit_ang = proj.transform(lat_fit)

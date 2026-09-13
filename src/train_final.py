@@ -112,6 +112,7 @@ def main() -> None:
 
     val_pool: list[tuple[list[str], np.ndarray, np.ndarray]] = []
     test_margins, fits = [], []
+    t_fold0 = time.time()
 
     for fold in range(min(args.run_folds or args.folds, args.folds)):
         cfg = E.Config(f"fold{fold}", frames_per_video=args.frames, epochs=args.epochs,
@@ -122,15 +123,27 @@ def main() -> None:
             "val": (x_all[val_idx], y_all[val_idx], [vid_all[i] for i in val_idx]),
             "test": (x_te, y_te, vid_te, grp_te),
         }
-        print(f"[2/4] fold {fold + 1}/{args.folds}: fit={len(fit_idx)} val={len(val_idx)} frames", flush=True)
+        n_run = min(args.run_folds or args.folds, args.folds)
+        eta = (time.time() - t_fold0) / fold * (n_run - fold) if fold else None
+        print(f"\n{'=' * 74}\n[2/4] FOLD {fold + 1}/{n_run}   fit={len(fit_idx)} frames "
+              f"({len(set(data_fit_vids := [vid_all[i] for i in fit_idx]))} videos)  "
+              f"val={len(val_idx)} frames ({len(set(vid_all[i] for i in val_idx))} videos)"
+              + (f"   eta {eta / 60:.1f} min" if eta else "") + f"\n{'=' * 74}", flush=True)
+        del data_fit_vids
         model, cnn_acc = E.train_cnn(cfg, SEED + fold, data)
         fit = E.fit_qsvm(cfg, model, data, np.random.default_rng(SEED + fold))
         fit["model"] = model
         fits.append(fit)
         test_margins.append(fit["test_margins"])
         val_pool.append(([vid_all[i] for i in val_idx], y_all[val_idx], fit["val_margins"]))
+        solo_lab, solo_sc = E.aggregate(vid_te, y_te, fit["test_margins"], "mean")
+        ens_lab, ens_sc = E.aggregate(vid_te, y_te, np.mean(test_margins, axis=0), "mean")
         print(f"      cnn_val={cnn_acc:.4f} svm_val={fit['svm_val_acc']:.4f} "
-              f"proj={fit['projector_mode']} scale={fit['angle_scale']} C={fit['C']}", flush=True)
+              f"proj={fit['projector_mode']} scale={fit['angle_scale']} C={fit['C']} "
+              f"support_vectors={len(fit['support'])}\n"
+              f"      this fold alone on Test: clip AUC={E.clip_report(solo_lab, solo_sc, 0.0)['roc_auc']:.4f} "
+              f"| ensemble so far ({len(test_margins)} members): "
+              f"clip AUC={E.clip_report(ens_lab, ens_sc, 0.0)['roc_auc']:.4f}", flush=True)
 
     print("[3/4] selecting aggregation + threshold on held-out clips ...", flush=True)
     # Each fold's SVM has its own margin scale, so thresholds are averaged rather
@@ -187,8 +200,20 @@ def main() -> None:
         "runtime_sec": round(time.time() - t0, 1),
         "protocol": "fit on Train videos; aggregation+threshold on pooled held-out Train clips; Test scored once",
     }
-    print("[4/4] " + json.dumps({k: v for k, v in metrics.items() if k != "clip"}), flush=True)
-    print("      CLIP: " + json.dumps(clip), flush=True)
+    cm = clip["confusion_matrix"]
+    print(f"\n{'=' * 74}\n[4/4] FINAL — dataset-3/Test, {len(t_lab)} clips never seen by any fold\n"
+          f"{'=' * 74}", flush=True)
+    for name, value in (("clip accuracy", clip["accuracy"]),
+                        ("balanced accuracy", clip["balanced_accuracy"]),
+                        ("recall (thefts caught)", clip["recall"]),
+                        ("precision", clip["precision"]),
+                        ("ROC-AUC (threshold-free)", clip["roc_auc"]),
+                        ("oracle-threshold accuracy", clip["oracle_threshold_accuracy"]),
+                        ("frame accuracy", frame_acc)):
+        print(f"      {name:<28} {value:.4f}", flush=True)
+    print(f"      confusion (clips)            tn={cm['tn']} fp={cm['fp']} fn={cm['fn']} tp={cm['tp']}\n"
+          f"      aggregation={how} threshold={threshold:+.4f} members={len(fits)} "
+          f"runtime={metrics['runtime_sec'] / 60:.1f} min", flush=True)
 
     members = [{
         "svm_classifier": f["clf"], "pca_transformer": f["projector"],
