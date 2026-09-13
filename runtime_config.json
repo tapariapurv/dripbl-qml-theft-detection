@@ -1,0 +1,33 @@
+{
+  "camera_source": 0,
+  "source_kind": "auto",
+  "loop_file": true,
+  "frame_width": 640,
+  "frame_height": 480,
+  "roi": [
+    140,
+    60,
+    360,
+    360
+  ],
+  "sensitivity": 0.5,
+  "min_contour_area": 500.0,
+  "debounce_sec": 3.0,
+  "mog2_history": 300,
+  "mog2_var_threshold": 32.0,
+  "cnn_input_size": 64,
+  "latent_dim": 128,
+  "pca_dim": 4,
+  "pca_components_path": "pca_components.npy",
+  "cnn_weights_path": "cnn_weights.pt",
+  "class_prototypes_path": "class_prototypes.json",
+  "quantum_endpoint": "",
+  "use_qiskit": true,
+  "alert_endpoint": "http://localhost:8000/api/alerts",
+  "request_timeout_sec": 2.0,
+  "thumbnail_jpeg_quality": 60,
+  "send_thumbnail": false,
+  "buzzer_pin": 17,
+  "led_pin": 27,
+  "log_path": "trials.log"
+}

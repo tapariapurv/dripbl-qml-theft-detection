@@ -1,0 +1,24 @@
+{
+  "clip": {
+    "n_clips": 194,
+    "accuracy": 0.8711340206185567,
+    "balanced_accuracy": 0.7962121212121211,
+    "recall": 0.6590909090909091,
+    "precision": 0.7435897435897436,
+    "false_negative_rate": 0.3409090909090909,
+    "roc_auc": 0.9090909090909092,
+    "confusion_matrix": {
+      "tn": 140,
+      "fp": 10,
+      "fn": 15,
+      "tp": 29
+    },
+    "oracle_threshold_accuracy": 0.8762886597938144
+  },
+  "frame_accuracy": 0.8449176964782885,
+  "aggregation": "mean",
+  "threshold": 0.282155,
+  "members": 5,
+  "n_test_frames": 20473,
+  "eval_seconds": 1.4
+}
