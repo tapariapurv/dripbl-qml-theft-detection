@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import experiments as E  # noqa: E402
 import train_qsvm as T  # noqa: E402
-from quantum_kernel import FEATURE_DIM  # noqa: E402
+from quantum_kernel import FEATURE_DIM, encode, kernel_matrix  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 FRAMES_PER_VIDEO = 30
@@ -49,6 +49,31 @@ def load_all(frames_per_video: int, test_frames: int) -> dict:
     }
 
 
+def load_dataset2(holdout: tuple[str, ...]) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray, np.ndarray, list[str]]:
+    """dataset-2 frames at 64x64, split by source video into (train, holdout).
+
+    Only 8 videos, but from a different camera/source than dataset-3 -- a model
+    trained on dataset-3 alone scores AUC 0.56 here (chance), i.e. it learned
+    that dataset's appearance rather than theft. Mixing it in is about
+    cross-source robustness, not about the dataset-3 headline number.
+    """
+    import cv2
+    root = ROOT.parent / "training-data" / "dataset-2" / "images"
+    xs, ys, vids = [], [], []
+    hx, hy, hv = [], [], []
+    for f in sorted(root.glob("*.png")):
+        video = f.name.rsplit("_f", 1)[0]
+        label = 0 if video.startswith("not_") else 1
+        img = cv2.cvtColor(cv2.resize(cv2.imread(str(f)), (T.FRAME_SIZE, T.FRAME_SIZE),
+                                      interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
+        if video in holdout:
+            hx.append(img); hy.append(label); hv.append(video)
+        else:
+            xs.append(img); ys.append(label); vids.append(video)
+    return (np.array(xs, dtype=np.uint8), np.array(ys), vids,
+            np.array(hx, dtype=np.uint8), np.array(hy), hv)
+
+
 def fold_split(videos: list[str], fold: int, n_folds: int) -> tuple[np.ndarray, np.ndarray]:
     """Row indices for (fit, val), partitioned by SOURCE VIDEO, not by frame."""
     unique = sorted(set(videos))
@@ -61,9 +86,12 @@ def fold_split(videos: list[str], fold: int, n_folds: int) -> tuple[np.ndarray, 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--folds", type=int, default=5)
+    ap.add_argument("--folds", type=int, default=5, help="split geometry (1/folds held out per member)")
+    ap.add_argument("--run-folds", type=int, default=None, help="train only this many members")
     ap.add_argument("--epochs", type=int, default=10)
     ap.add_argument("--frames", type=int, default=FRAMES_PER_VIDEO)
+    ap.add_argument("--with-dataset2", action="store_true",
+                    help="mix dataset-2 into training and report cross-source transfer")
     args = ap.parse_args()
 
     torch.set_num_threads(max(1, (os.cpu_count() or 4) - 1))
@@ -73,10 +101,19 @@ def main() -> None:
     x_all, y_all, vid_all = data_all["train"]
     x_te, y_te, vid_te, grp_te = data_all["test"]
 
+    d2_hold = ("not_shoplifting4", "shoplifting4")   # one clip per class, never trained on
+    if args.with_dataset2:
+        d2x, d2y, d2v, hx, hy, hv = load_dataset2(d2_hold)
+        x_all = np.concatenate([x_all, d2x])
+        y_all = np.concatenate([y_all, d2y])
+        vid_all = list(vid_all) + d2v
+        print(f"  + dataset-2: {len(d2y)} frames from {len(set(d2v))} videos "
+              f"(holdout {d2_hold}: {len(hy)} frames)", flush=True)
+
     val_pool: list[tuple[list[str], np.ndarray, np.ndarray]] = []
     test_margins, fits = [], []
 
-    for fold in range(args.folds):
+    for fold in range(min(args.run_folds or args.folds, args.folds)):
         cfg = E.Config(f"fold{fold}", frames_per_video=args.frames, epochs=args.epochs,
                        seeds=(SEED + fold,), test_frames_per_video=TEST_FRAMES_PER_VIDEO)
         fit_idx, val_idx = fold_split(vid_all, fold, args.folds)
@@ -122,7 +159,26 @@ def main() -> None:
     clip_zero = E.clip_report(t_lab, t_scores, 0.0)
     frame_acc = float(((ens_test > 0).astype(int) == y_te).mean())
 
+    d2_report = None
+    if args.with_dataset2:
+        def _d2_margin(f):
+            lat = np.concatenate([E.embed_batch_compat(f["model"], hx[i:i + 256])
+                                  for i in range(0, len(hx), 256)])
+            ang = f["projector"].transform(lat)
+            K = np.zeros((len(ang), int(f["clf"].shape_fit_[0])), dtype=np.float64)
+            K[:, f["clf"].support_] = kernel_matrix(encode(ang), encode(f["support"]))
+            return f["clf"].decision_function(K)
+
+        d2_margins = np.mean([_d2_margin(f) for f in fits], axis=0)
+        lab, sc = E.aggregate(hv, hy, d2_margins, how)
+        d2_report = {"clips": len(lab), "frame_accuracy": float(((d2_margins > 0).astype(int) == hy).mean()),
+                     "clip_scores": {v: float(s_) for v, s_ in zip(dict.fromkeys(hv), sc)},
+                     "clip_labels": lab.tolist(),
+                     "clip_correct": int(((sc > threshold).astype(int) == lab).sum())}
+        print("      dataset-2 holdout: " + json.dumps(d2_report), flush=True)
+
     metrics = {
+        "dataset2_holdout": d2_report,
         "model": f"{args.folds}-fold video ensemble, {args.epochs} epochs",
         "aggregation": how, "val_clip_accuracy": val_acc,
         "frame_accuracy": frame_acc, "clip": clip,

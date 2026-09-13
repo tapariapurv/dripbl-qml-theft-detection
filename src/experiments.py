@@ -74,6 +74,11 @@ class Config:
     freeze_upto: int = 9       # mobilenet_ft: keep the early ImageNet blocks fixed
 
 
+def embed_batch_compat(model, images):
+    """128-d latents for uint8 frames, using a trained model's backbone."""
+    return _forward(model, images, backbone=True)
+
+
 # ---------------------------------------------------------------- data loading
 
 _CACHE: dict[tuple, tuple] = {}

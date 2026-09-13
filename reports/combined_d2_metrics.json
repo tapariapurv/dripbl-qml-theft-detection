@@ -1,0 +1,55 @@
+{
+  "dataset2_holdout": {
+    "clips": 2,
+    "frame_accuracy": 0.6230769230769231,
+    "clip_scores": {
+      "not_shoplifting4": 0.4354452751652324,
+      "shoplifting4": 0.8194171146299277
+    },
+    "clip_labels": [
+      0,
+      1
+    ],
+    "clip_correct": 2
+  },
+  "model": "5-fold video ensemble, 6 epochs",
+  "aggregation": "mean",
+  "val_clip_accuracy": 0.8283261802575107,
+  "frame_accuracy": 0.7974405314316416,
+  "clip": {
+    "n_clips": 194,
+    "accuracy": 0.8298969072164949,
+    "balanced_accuracy": 0.7293939393939394,
+    "recall": 0.5454545454545454,
+    "precision": 0.6486486486486487,
+    "false_negative_rate": 0.45454545454545453,
+    "roc_auc": 0.8710606060606061,
+    "confusion_matrix": {
+      "tn": 137,
+      "fp": 13,
+      "fn": 20,
+      "tp": 24
+    },
+    "oracle_threshold_accuracy": 0.8556701030927835
+  },
+  "clip_zero_threshold": {
+    "n_clips": 194,
+    "accuracy": 0.8144329896907216,
+    "balanced_accuracy": 0.8077272727272726,
+    "recall": 0.7954545454545454,
+    "precision": 0.5645161290322581,
+    "false_negative_rate": 0.20454545454545456,
+    "roc_auc": 0.8710606060606061,
+    "confusion_matrix": {
+      "tn": 123,
+      "fp": 27,
+      "fn": 9,
+      "tp": 35
+    }
+  },
+  "threshold": 0.626825,
+  "n_test_clips": 194,
+  "n_test_frames": 20473,
+  "runtime_sec": 307.4,
+  "protocol": "fit on Train videos; aggregation+threshold on pooled held-out Train clips; Test scored once"
+}
