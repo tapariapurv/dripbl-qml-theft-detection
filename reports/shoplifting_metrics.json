@@ -1,0 +1,76 @@
+{
+  "dataset": "dataset-1 (retail shoplifting, 640x480 source, 96x96 + motion)",
+  "protocol": "5-fold cross-validation by video; every clip tested once by a model that never saw it",
+  "n_clips": 182,
+  "n_frames": 10837,
+  "clip_accuracy": 0.8021978021978022,
+  "balanced_accuracy": 0.8027777777777778,
+  "recall": 0.75,
+  "precision": 0.8414634146341463,
+  "false_negative_rate": 0.25,
+  "roc_auc": 0.8369565217391305,
+  "confusion_matrix": {
+    "tn": 77,
+    "fp": 13,
+    "fn": 23,
+    "tp": 69
+  },
+  "per_fold": [
+    {
+      "fold": 0,
+      "clips": 37,
+      "accuracy": 0.7837837837837838,
+      "inner_val": 0.84,
+      "threshold": 0.07694999999999999,
+      "svm_val": 0.787232905982906,
+      "projector": "pls",
+      "angle_scale": 0.15,
+      "C": 256.0
+    },
+    {
+      "fold": 1,
+      "clips": 37,
+      "accuracy": 0.9459459459459459,
+      "inner_val": 0.84,
+      "threshold": 0.48725,
+      "svm_val": 0.7460470085470086,
+      "projector": "pca",
+      "angle_scale": 0.3,
+      "C": 16.0
+    },
+    {
+      "fold": 2,
+      "clips": 36,
+      "accuracy": 0.8055555555555556,
+      "inner_val": 0.92,
+      "threshold": 0.9184,
+      "svm_val": 0.7737868976217844,
+      "projector": "pls",
+      "angle_scale": 0.6,
+      "C": 1.0
+    },
+    {
+      "fold": 3,
+      "clips": 36,
+      "accuracy": 0.75,
+      "inner_val": 0.84,
+      "threshold": 0.6587000000000001,
+      "svm_val": 0.7822649572649573,
+      "projector": "pls",
+      "angle_scale": 0.6,
+      "C": 256.0
+    },
+    {
+      "fold": 4,
+      "clips": 36,
+      "accuracy": 0.7222222222222222,
+      "inner_val": 0.88,
+      "threshold": 0.39385000000000003,
+      "svm_val": 0.828527760313916,
+      "projector": "pca",
+      "angle_scale": 0.3,
+      "C": 16.0
+    }
+  ],
+  "runtime_sec": 3552.3
+}

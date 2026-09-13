@@ -5,3 +5,5 @@ __pycache__/
 reports/feature_cache.npz
 reports/*.log
 trials.log
+reports/dataset1_frames.npz
+models/shoplifting_model.joblib
