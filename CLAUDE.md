@@ -120,6 +120,29 @@ the best artifact. Findings, so results are not re-litigated:
 | MIL ranking (Sultani-style) | 0.646 | rejected — ~5x fewer optimiser steps from scratch; needs precomputed features |
 | clip-descriptor QSVM (`clip_qsvm`) | 0.875 | rejected for deployment — cannot score a single frame |
 | frozen ImageNet (MobileNetV3/ResNet18) | 0.711 | rejected — built for 224x224, collapses to a 2x2 map at 64x64 |
+| mix dataset-2 in (`--with-dataset2`) | **0.871** vs 0.811 | **kept** — measured at matched cost; also fixed cross-source transfer (2/2 holdout clips vs 0/2 before) |
+| dataset-4 temporal masks (`--temporal-labels`) | 0.841 vs 0.871 | rejected — see below |
+
+### The other datasets
+
+- **dataset-2** — 8 clips from a different camera/source. Small, but the only
+  cross-source signal available; a dataset-3-only model scores AUC 0.56 (chance)
+  on it, proving it learned UCF-Crime scene appearance rather than theft.
+  Mixing it in helps both numbers. Kept.
+- **dataset-4** — UCF-Crime **source video**, not new footage: all 244 clips are
+  already in dataset-3 (220 Train, **24 Test** — training on its `.mp4`s would
+  leak the test set). Its value is `Labels/*.csv`: 32 uniform temporal bins per
+  video with a binary anomaly flag, mapped onto dataset-3 frame names by
+  `src/temporal_labels.py` (60,714 crime frames covered).
+  The masks are genuine — 1.43 contiguous anomalous blocks per video vs 5.99
+  when shuffled, 70% a single interval — but using them as Train labels *lowered*
+  AUC to 0.841. `src/check_mask_alignment.py` explains why: the model gives every
+  frame of a clip a near-identical margin (within-clip agreement 47%, chance), so
+  it has no temporal resolution to exploit them. Dropping 29% of positives just
+  shrinks the class it actually relies on. Kept behind a flag, off by default.
+  **This is the clearest statement yet of the ceiling: 64x64 single frames carry
+  scene, not act.** Temporal modelling (frame stacks/optical flow over the real
+  video in dataset-4) is the only untried lever with real headroom.
 
 Five structurally different methods converge on AUC 0.87-0.91, and the
 oracle-threshold diagnostic (best achievable accuracy if the cut were placed
