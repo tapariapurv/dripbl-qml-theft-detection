@@ -29,6 +29,16 @@ def run() -> None:
     judge = AIJudge(settings)
     alerter = NetworkAlerter(settings)
 
+    # Prefer the trained QSVM ensemble; fall back to the prototype classifier so a
+    # checkout with no models/qsvm_model.joblib still runs.
+    try:
+        from theft_detector import TheftDetector
+        theft = TheftDetector(settings)
+        print(f"[dripbl-fog] theft model: {theft.description}")
+    except Exception as exc:  # noqa: BLE001
+        theft = None
+        print(f"[dripbl-fog] no trained model ({exc}); using seeded prototype classifier")
+
     last_trigger = 0.0
     last_config_check = 0.0
     print(f"[dripbl-fog] node online, source={settings.camera_source} sensitivity={settings.sensitivity}")
@@ -59,8 +69,12 @@ def run() -> None:
                 continue
 
             t0 = time.perf_counter()
-            features = pipeline.extract_features(frame)
-            quantum_result = quantum.classify(features)
+            if theft is not None:
+                quantum_result = theft.classify(frame)
+                features = quantum_result["features"]
+            else:
+                features = pipeline.extract_features(frame)
+                quantum_result = quantum.classify(features)
             verdict = judge.judge(quantum_result, gait)
             elapsed_ms = (time.perf_counter() - t0) * 1e3
 

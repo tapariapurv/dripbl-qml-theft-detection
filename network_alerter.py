@@ -57,7 +57,9 @@ class NetworkAlerter:
         payload: dict[str, Any] = {
             "trial_id": trial_id,
             "timestamp": time.time(),
-            "features": features.tolist(),
+            # asarray, not .tolist(): the feature vector arrives as an ndarray from
+            # EdgePipeline but as a plain list from TheftDetector.
+            "features": np.asarray(features, dtype=float).tolist(),
             "quantum": quantum_result,
             "verdict": verdict,
         }

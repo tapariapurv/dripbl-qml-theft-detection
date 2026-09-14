@@ -19,12 +19,18 @@ class AIJudge:
         speed_anomaly = min(gait["speed_px_s"] / _NERVOUS_SPEED_PX_S, 1.0)
         nervousness = gait["jitter_score"]
 
-        suspicion = (
-            0.5 * crime_signal
-            + 0.25 * nervousness
-            + 0.15 * speed_anomaly
-            + 0.10 * (1.0 if is_person and nervousness > 0.5 else 0.0)
-        )
+        if quantum_result.get("trained"):
+            # A measured detector (0.871 clip accuracy) deserves to dominate the
+            # score; gait stays as a modifier rather than a near-equal vote, which
+            # is only appropriate for the seeded prototype fallback below.
+            suspicion = 0.80 * crime_signal + 0.13 * nervousness + 0.07 * speed_anomaly
+        else:
+            suspicion = (
+                0.5 * crime_signal
+                + 0.25 * nervousness
+                + 0.15 * speed_anomaly
+                + 0.10 * (1.0 if is_person and nervousness > 0.5 else 0.0)
+            )
         suspicion = min(max(suspicion, 0.0), 1.0)
         threshold = self._settings.flag_threshold
         return {
