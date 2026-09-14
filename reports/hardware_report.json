@@ -1,0 +1,62 @@
+{
+  "circuit": {
+    "logical_qubits": 4,
+    "abstract_depth": 3,
+    "backend": "fake_brisbane",
+    "device_qubits": 127,
+    "transpiled_depth": 108,
+    "two_qubit_gates": 22,
+    "total_gates": 249
+  },
+  "cost": {
+    "ensemble_members": 5,
+    "support_vectors_per_member": [
+      565,
+      789,
+      618,
+      879,
+      1037
+    ],
+    "circuits_per_frame": 3888
+  },
+  "kernel_shot_error": {
+    "256": {
+      "mean_abs_error": 0.017849533881252502,
+      "max_abs_error": 0.08316974300371538
+    },
+    "1024": {
+      "mean_abs_error": 0.009285469433080722,
+      "max_abs_error": 0.037251220968166854
+    },
+    "4096": {
+      "mean_abs_error": 0.004625023522107768,
+      "max_abs_error": 0.023839133204134166
+    },
+    "16384": {
+      "mean_abs_error": 0.0021974766836202805,
+      "max_abs_error": 0.012071274831000844
+    }
+  },
+  "accuracy_vs_shots": {
+    "exact": {
+      "clip_accuracy": 0.866,
+      "roc_auc": 0.9048
+    },
+    "256": {
+      "clip_accuracy": 0.5,
+      "roc_auc": 0.5002
+    },
+    "1024": {
+      "clip_accuracy": 0.5206,
+      "roc_auc": 0.5208
+    },
+    "4096": {
+      "clip_accuracy": 0.6443,
+      "roc_auc": 0.6712
+    },
+    "16384": {
+      "clip_accuracy": 0.7577,
+      "roc_auc": 0.7585
+    }
+  }
+}
