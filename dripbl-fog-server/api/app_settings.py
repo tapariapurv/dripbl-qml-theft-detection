@@ -77,7 +77,7 @@ DEFAULTS: dict[str, Any] = {
         "cors_origins": ["*"],
     },
     "retention": {
-        "days": 0,                     # delete trials + snapshots older than this; 0 = keep forever
+        "days": 90,                    # delete trials + snapshots older than this (a common CCTV period); 0 = keep forever
     },
 }
 

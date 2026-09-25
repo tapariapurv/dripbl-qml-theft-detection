@@ -12,6 +12,7 @@ comes from $DRIPBL_API_KEY, else data/api_key (generated on first start, 0600).
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import dataclasses
 import hmac
@@ -24,7 +25,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, AsyncIterator, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -213,23 +214,25 @@ def frame():
 
 
 @app.get("/api/stream", tags=["video"], dependencies=read)
-def stream(fps: float = Query(10.0, gt=0, le=30)):
-    """MJPEG stream of the node's annotated live frame — use directly as <img src>."""
+async def stream(fps: float = Query(10.0, gt=0, le=30)):
+    """MJPEG stream of the node's annotated live frame — use directly as <img src>.
+    Async: an open viewer costs no worker thread while it waits for the next frame, so
+    hundreds of open dashboards cannot starve the rest of the API."""
     path, period = DATA_DIR / "live.jpg", 1.0 / fps
 
-    def frames() -> Iterator[bytes]:
+    async def frames() -> AsyncIterator[bytes]:
         last = 0.0
         while True:
             try:
                 mtime = path.stat().st_mtime
                 if mtime != last:
                     last = mtime
-                    jpg = path.read_bytes()
+                    jpg = path.read_bytes()  # ~50 KB: cheaper inline than a thread hop
                     yield b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + \
                         str(len(jpg)).encode() + b"\r\n\r\n" + jpg + b"\r\n"
             except OSError:
                 pass
-            time.sleep(period)
+            await asyncio.sleep(period)
 
     return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame",
                              headers={"Cache-Control": "no-store"})

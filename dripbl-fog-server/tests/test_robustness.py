@@ -200,6 +200,28 @@ def test_store_concurrency() -> None:
     print("ok: store concurrency (1500 writes vs 4 readers)")
 
 
+def test_retention() -> None:
+    """The worker deletes trials + snapshots older than retention.days, keeps the rest."""
+    from api.worker import Worker
+    db, snaps = tmp / "ret.db", tmp / "snaps"
+    snaps.mkdir()
+    def trial(tid, age_days):
+        (snaps / f"{tid}.jpg").write_bytes(b"jpg")
+        store.insert_trial(db, {"trial_id": tid, "timestamp": time.time() - age_days * 86400, "features": [0] * 4,
+                                "quantum": {"object_class": "theft", "margin": 1.0},
+                                "verdict": {"suspicion_score": 0.9, "threshold": 0.5, "flagged": True, "gait": {}}},
+                           snapshot=f"{tid}.jpg")
+    trial("old", 120)
+    trial("new", 1)
+    w = Worker(db, snaps, tmp / "ret_state.json")
+    w._state["last_ts"] = time.time()  # nothing new to notify about
+    w._tick()
+    ids = [t["id"] for t in store.list_trials(db, limit=10)]
+    assert ids == ["new"], ids
+    assert not (snaps / "old.jpg").exists() and (snaps / "new.jpg").exists()
+    print("ok: retention (120-day-old trial + snapshot deleted, recent kept)")
+
+
 def test_api_fuzz() -> None:
     from fastapi.testclient import TestClient
     from api.server import DB, app
@@ -260,5 +282,6 @@ if __name__ == "__main__":
     test_camera_reconnect()
     test_config()
     test_store_concurrency()
+    test_retention()
     test_api_fuzz()
     print("ALL ROBUSTNESS TESTS PASSED")

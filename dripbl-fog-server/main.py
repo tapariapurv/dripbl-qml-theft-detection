@@ -249,6 +249,8 @@ def run() -> None:
                     "latency_ms": last_infer_ms, "model": model_desc,
                     "mode": settings.mode, "source": source.name,
                 }
+                if "latent" in quantum_result:  # 68% of a stored trial; 3 decimals is plenty for display
+                    quantum_result["latent"] = [round(v, 3) for v in quantum_result["latent"]]
                 alerter.log_trial(payload)
 
                 snapshot = None
