@@ -162,23 +162,31 @@ def report(labels: np.ndarray, scores: np.ndarray, threshold: float) -> dict:
             "auc": float(roc_auc_score(labels, scores)) if len(set(labels.tolist())) > 1 else float("nan")}
 
 
-def evaluate(margin_fn, threshold: float, d3_frames: int = 60, thresholds: dict[str, float] | None = None) -> dict[str, dict]:
-    """margin_fn(rgb_uint8 (N,64,64,3), motion or None, vids) -> (N,) frame margins."""
+def holdout_clip_scores(margin_fn, d3_frames: int = 60) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Score every hold-out clip once: {set: (labels, clip scores)}.
+    margin_fn(rgb_uint8 (N,64,64,3), motion or None, vids) -> (N,) frame margins."""
     sets = {
         "dataset3_test": load_dataset3_test(d3_frames),
         "dataset1_holdout": dataset1_part("holdout"),
         "dataset2_holdout": dataset2_part("holdout"),
     }
-    out = {}
-    for name, d in sets.items():
-        m = margin_fn(d["rgb"], d.get("motion"), d["vid"])
-        out[name] = report(*clip_scores(m, d["vid"], d["y"]), (thresholds or {}).get(name, threshold))
-    return out
+    return {name: clip_scores(margin_fn(d["rgb"], d.get("motion"), d["vid"]), d["vid"], d["y"])
+            for name, d in sets.items()}
+
+
+def evaluate(margin_fn, threshold: float, d3_frames: int = 60, thresholds: dict[str, float] | None = None,
+             scores: dict | None = None) -> dict[str, dict]:
+    """Clip-level report per hold-out set (pass `scores` to reuse holdout_clip_scores)."""
+    scores = scores or holdout_clip_scores(margin_fn, d3_frames)
+    return {name: report(lab, sc, (thresholds or {}).get(name, threshold)) for name, (lab, sc) in scores.items()}
 
 
 def artifact_margin_fn(model_path: str | Path):
+    import os
+    import torch
     from inference import LiveTheftClassifier
     clf = LiveTheftClassifier(model_path)
+    torch.set_num_threads(os.cpu_count() or 4)  # offline evaluation: use every core (the node pins 1)
 
     def fn(rgb: np.ndarray, motion, vids) -> np.ndarray:
         x = np.concatenate([rgb, motion], -1) if clf.in_channels == 6 else rgb

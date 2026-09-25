@@ -1,0 +1,95 @@
+{
+  "artifact": "models/candidates/retail_r18m.joblib",
+  "config": {
+    "name": "retail_r18m",
+    "backbone": "resnet18",
+    "motion": true,
+    "input_size": 128,
+    "epochs": 4,
+    "steps_per_epoch": 200,
+    "batch": 128,
+    "lr": 0.0003,
+    "weight_decay": 0.0005,
+    "dropout": 0.5,
+    "share": [
+      0.0,
+      0.85,
+      0.15
+    ],
+    "d3_frames": 20,
+    "fit_per_label": 1500,
+    "seed": 42,
+    "size": 64,
+    "sources": [
+      "d1",
+      "d2"
+    ]
+  },
+  "folds": 5,
+  "threshold": 0.5907298230281669,
+  "oof_clip_auc": {
+    "d1": 0.9046546546546547,
+    "d2": 0.11111111111111112
+  },
+  "oof_clip_acc": {
+    "d1": 0.8561643835616438
+  },
+  "site_thresholds": {
+    "default": 0.5907298230281669,
+    "retail": 0.625975
+  },
+  "holdout": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.7216494845360825,
+      "recall": 0.09090909090909091,
+      "fp": 14,
+      "fn": 40,
+      "auc": 0.5396969696969697
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.7777777777777778,
+      "recall": 0.7222222222222222,
+      "fp": 3,
+      "fn": 5,
+      "auc": 0.8765432098765433
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 0.0,
+      "fp": 0,
+      "fn": 1,
+      "auc": 0.0
+    }
+  },
+  "holdout_site_calibrated": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.7216494845360825,
+      "recall": 0.09090909090909091,
+      "fp": 14,
+      "fn": 40,
+      "auc": 0.5396969696969697
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.75,
+      "recall": 0.6666666666666666,
+      "fp": 3,
+      "fn": 6,
+      "auc": 0.8765432098765433
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 0.0,
+      "fp": 0,
+      "fn": 1,
+      "auc": 0.0
+    }
+  },
+  "minutes": 93.9,
+  "protocol": "k-fold by video over dataset-3 Train + dataset-1 train split + dataset-2 train clips; threshold from pooled out-of-fold clips; hold-outs scored once via LiveTheftClassifier"
+}

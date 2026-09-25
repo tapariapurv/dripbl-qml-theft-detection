@@ -78,10 +78,13 @@ def main() -> None:
     ap.add_argument("--profile", default="retail", choices=["default", "cctv", "retail"])
     ap.add_argument("--set", default="dataset1", choices=["dataset1", "dataset2"])
     ap.add_argument("--sensitivity", type=float, default=None)
+    ap.add_argument("--model", help="evaluate this artifact instead of the installed one")
     args = ap.parse_args()
     base = ConfigStore().settings
-    settings = dataclasses.replace(base, site_profile=args.profile, roi=(0, 0, 10000, 10000),  # whole frame
-                                   **({"sensitivity": args.sensitivity} if args.sensitivity is not None else {}))
+    over = {"sensitivity": args.sensitivity} if args.sensitivity is not None else {}
+    if args.model:
+        over["retail_model_path" if args.profile == "retail" else "model_path"] = str(Path(args.model).resolve())
+    settings = dataclasses.replace(base, site_profile=args.profile, roi=(0, 0, 10000, 10000), **over)  # whole frame
     det, judge = TheftDetector(settings), AIJudge(settings)
     print(f"model: {det.description} · profile {args.profile} · threshold {det.threshold:+.3f} · "
           f"sensitivity {settings.sensitivity}", flush=True)

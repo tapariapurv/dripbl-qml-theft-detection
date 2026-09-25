@@ -90,6 +90,8 @@ CONFIGS = {c.name: c for c in [
         sources=("d1", "d2"), share=(0.0, 0.85, 0.15)),
     Cfg("cctv_r18", backbone="resnet18", input_size=112, lr=3e-4, epochs=4, steps_per_epoch=300,
         sources=("d3",), share=(1.0, 0.0, 0.0)),
+    # a cheap, differently-biased partner for ensembling with retail_r18m (same seed -> same folds)
+    Cfg("retail_tiny_m", motion=True, epochs=10, steps_per_epoch=200, sources=("d1", "d2"), share=(0.0, 0.85, 0.15)),
 ]}
 
 

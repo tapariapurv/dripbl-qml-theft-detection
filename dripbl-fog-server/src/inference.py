@@ -44,9 +44,10 @@ class LiveTheftClassifier:
         self.motion_gap_sec = float(self.metadata.get("motion_gap_sec", 1 / 3))
         self._members = []
         for member in members:
-            if spec:
+            mspec = member.get("backbone", spec)  # combined ensembles mix backbones per member
+            if mspec:
                 from backbones import Backbone
-                cnn = Backbone(spec["kind"], int(spec["channels"]), int(spec["input_size"]))
+                cnn = Backbone(mspec["kind"], int(mspec["channels"]), int(mspec["input_size"]))
                 cnn.load_state_dict(member["backbone_state"])
             else:
                 cnn = load_cnn(in_channels=in_ch)
@@ -59,6 +60,8 @@ class LiveTheftClassifier:
                 "projector": member["pca_transformer"],
                 "states": encode(member["support_vectors"]),
                 "n_train": int(member["svm_classifier"].shape_fit_[0]),
+                # members from different models are put on one scale before averaging
+                "shift": float(member.get("margin_shift", 0.0)), "scale": float(member.get("margin_scale", 1.0)),
             })
         torch.set_num_threads(1)  # edge node: predictable single-thread latency
 
@@ -93,7 +96,7 @@ class LiveTheftClassifier:
         angles = member["projector"].transform(latents)
         K = np.zeros((len(angles), member["n_train"]), dtype=np.float64)
         K[:, member["clf"].support_] = kernel_matrix(encode(angles), member["states"])
-        return member["clf"].decision_function(K), angles, latents
+        return (member["clf"].decision_function(K) - member["shift"]) / member["scale"], angles, latents
 
     def margins_from_arrays(self, x_uint8: np.ndarray, batch: int = 512) -> np.ndarray:
         """Ensemble frame margins for ready-made 64x64 inputs (N, 64, 64, C) uint8 RGB[+motion]:

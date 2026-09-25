@@ -33,6 +33,24 @@ from quantum_kernel import FEATURE_DIM  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def training_pool(cfg: X.Cfg) -> dict[str, np.ndarray]:
+    fit, val = X.load_train(cfg)
+    return {k: np.concatenate([fit[k], val[k]]) for k in fit}
+
+
+def assign_folds(pool: dict, folds: int, seed: int) -> np.ndarray:
+    """Fold per row, by VIDEO, stratified per (dataset, class). Deterministic, so a later
+    script can tell which ensemble member never saw a given clip (member k <-> fold k)."""
+    fold_of: dict[str, int] = {}
+    rng = np.random.default_rng(seed)
+    for s in X.SOURCES:
+        for label in (0, 1):
+            names = sorted(set(pool["vid"][(pool["src"] == s) & (pool["y"] == label)].tolist()))
+            for i, j in enumerate(rng.permutation(len(names))):
+                fold_of[names[j]] = i % folds
+    return np.array([fold_of[v] for v in pool["vid"]])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("config")
@@ -48,20 +66,11 @@ def main() -> None:
         cfg = dataclasses.replace(cfg, steps_per_epoch=args.steps)
     t0 = time.time()
 
-    fit, val = X.load_train(cfg)
-    pool = {k: np.concatenate([fit[k], val[k]]) for k in fit}
+    pool = training_pool(cfg)
     print(f"[train_xd] {cfg.name}: {len(pool['y'])} frames, "
           + " ".join(f"{s}={len(set(pool['vid'][pool['src'] == s].tolist()))} videos" for s in X.SOURCES), flush=True)
 
-    # fold assignment by VIDEO, stratified per (dataset, class)
-    fold_of: dict[str, int] = {}
-    rng = np.random.default_rng(cfg.seed)
-    for s in X.SOURCES:
-        for label in (0, 1):
-            names = sorted(set(pool["vid"][(pool["src"] == s) & (pool["y"] == label)].tolist()))
-            for i, j in enumerate(rng.permutation(len(names))):
-                fold_of[names[j]] = i % args.folds
-    fold = np.array([fold_of[v] for v in pool["vid"]])
+    fold = assign_folds(pool, args.folds, cfg.seed)
 
     members, oof = [], np.zeros(len(pool["y"]))
     for k in range(args.folds):
@@ -112,8 +121,9 @@ def main() -> None:
 
     # score the SAVED artifact through the live node's classifier: what you deploy is what is measured
     fn, thr = C.artifact_margin_fn(out)
-    results = C.evaluate(fn, thr)
-    site_results = C.evaluate(fn, thr, thresholds={"dataset3_test": site_thresholds.get("cctv", thr),
+    scores = C.holdout_clip_scores(fn)
+    results = C.evaluate(fn, thr, scores=scores)
+    site_results = C.evaluate(fn, thr, scores=scores, thresholds={"dataset3_test": site_thresholds.get("cctv", thr),
                                                    "dataset1_holdout": site_thresholds.get("retail", thr)})
     art = joblib.load(out)
     art["metadata"].update({
