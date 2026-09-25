@@ -18,6 +18,8 @@ python3.11 -m venv .venv        # use 3.11 — pinned torch/opencv wheels don't 
 
 There is no camera/network dependency required to test: no real camera source falls back to a synthetic generated feed, and the quantum classifier and AI judge run fully locally (no cloud/QPU required) unless `quantum_endpoint`/`alert_endpoint` are set in `runtime_config.json`.
 
+For the dashboard and API, see **Command center** below.
+
 ## Architecture
 
 Four-stage pipeline, one stage per module, orchestrated by `main.py`'s loop:
@@ -45,6 +47,47 @@ Four-stage pipeline, one stage per module, orchestrated by `main.py`'s loop:
 ### Payload shape
 
 `NetworkAlerter.build_payload` assembles the full per-trial record: `trial_id`, `timestamp`, `features` (4 PCA angles), `quantum` (classifier output), `verdict` (AI judge output incl. gait), optional base64 JPEG thumbnail. This is both what's logged and what's POSTed on a flagged alert — extend it here if a new stage's output needs to reach the log or the human endpoint.
+
+## Command center (API server + dashboard)
+
+```bash
+.venv/bin/python3 start.py                  # node + API (:8000) + dashboard (:8501); Ctrl-C stops all
+.venv/bin/python3 start.py --mock           # research mode: replays labelled dataset-1 clips
+.venv/bin/python3 start.py --api-port 8010 --dash-port 8600   # if the default ports are taken
+.venv/bin/python3 tests/test_api.py         # API check (temp DB/config; no node needed)
+sudo -E bash deploy/install.sh              # Pi / Linux: systemd services, start on boot
+```
+
+Three processes that share nothing but files in `data/`, so any one can crash or restart
+without taking down the others:
+
+- **Node (`main.py`)** writes every trial to `data/dripbl.db` (`store.py`, SQLite in WAL mode),
+  the annotated live frame to `data/live.jpg` (written atomically at `live_frame_fps`), a JPEG per flagged
+  trial to `data/snapshots/`, and a heartbeat row every `heartbeat_sec`. `payload["stage"]` plus the judge's
+  `signals`/`breakdown` and the detector's `member_margins`/`latent` are what the Pipeline Inspector draws.
+  Mock mode (`mode="mock"`) rotates shuffled `mock_dir/{normal,shoplifting}/*.mp4` clips through
+  `FrameGrabber.reconfigure` and tags each trial with `ground_truth`.
+- **API (`api/server.py`, FastAPI)** is the only data surface: the dashboard never reads files itself.
+  Writes need `X-API-Key` (env `DRIPBL_API_KEY`, else generated into `data/api_key`). `PUT /api/config`
+  validates, then writes `runtime_config.json` atomically, and the node hot-reloads it. `api/app_settings.py`
+  owns `app_settings.json` (dashboard look, notifications, AI judge, quantum, API, retention); its
+  `DEFAULTS` dict *is* the schema, so to add a setting, add it there. Secrets are masked on read.
+  `api/worker.py` runs in the API process: optional Claude second opinion on flagged trials, then
+  ntfy/webhook/email, then retention. It lives in the API rather than the node so network calls can
+  never stall frame processing. `api/quantum_check.py` runs the fidelity kernel for recent trials on
+  FakeBrisbane / IBM hardware in a background job.
+- **Dashboard (`dashboard/app.py` + `dashboard/views/*`, Streamlit)**: live video is the API's
+  MJPEG stream in a plain `<img>`, so frames never pass through Streamlit, and only
+  `st.fragment(run_every=refresh_sec)` panels poll. That keeps it light enough for a Pi.
+  All HTTP goes through `dashboard/lib.py`. Set `DRIPBL_DASHBOARD_PASSWORD` before exposing it on a network.
+
+Gotchas:
+- Settings hot-reload rebuilds `MotionDetector` (it copies ROI/MOG2/sensitivity at init; without the rebuild,
+  ROI and sensitivity edits never reached the motion gate).
+- `FrameGrabber.read()` returns `None` when there is no new frame. Don't "fix" that: returning the last
+  frame again made the loop re-classify duplicates at 100% CPU.
+- Mock-mode scores are per trial, on dataset-1, which the deployed model never trained on, so they
+  measure cross-source transfer. Expect far lower recall than the 0.871 UCF-Crime clip benchmark.
 
 ## Offline QSVM training pipeline (`src/`, `models/`, `reports/`)
 
