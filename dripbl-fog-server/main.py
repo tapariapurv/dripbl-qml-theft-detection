@@ -12,6 +12,7 @@ snapshot per flagged trial, and a heartbeat row with live node status.
 """
 from __future__ import annotations
 import dataclasses
+import json
 import os
 import signal
 import time
@@ -62,6 +63,15 @@ def _display_name(source: object) -> str:
     return text
 
 
+def _holdout_clips() -> set[str] | None:
+    """dataset-1 clips no model trained on (None = no split file: replay everything)."""
+    split = ROOT / "reports" / "dataset1_split.json"
+    try:
+        return {v.split(":", 1)[1] for v in json.loads(split.read_text())["holdout"]}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 class _Source:
     """Owns what the grabber is playing: the configured camera/file, or rotating mock clips."""
 
@@ -73,7 +83,7 @@ class _Source:
     def apply(self, settings: Settings) -> None:
         if settings.mode == "mock":
             try:
-                self._mock = MockClips(ROOT / settings.mock_dir)
+                self._mock = MockClips(ROOT / settings.mock_dir, only=_holdout_clips() if settings.mock_holdout_only else None)
             except FileNotFoundError as exc:
                 print(f"[dripbl-fog] mock mode unavailable ({exc}); using camera_source")
                 self._mock = None
@@ -152,8 +162,9 @@ def run() -> None:
                         if last_problems:
                             print(f"[dripbl-fog] config problem (kept the previous values): {last_problems}")
                     if fresh is not None:
-                        if (fresh.mode, fresh.camera_source, fresh.source_kind, fresh.mock_dir) != \
-                                (settings.mode, settings.camera_source, settings.source_kind, settings.mock_dir):
+                        if (fresh.mode, fresh.camera_source, fresh.source_kind, fresh.mock_dir, fresh.mock_holdout_only) != \
+                                (settings.mode, settings.camera_source, settings.source_kind, settings.mock_dir,
+                                 settings.mock_holdout_only):
                             source.apply(fresh)
                         settings = fresh
                         pipeline._settings = settings          # ponytail: direct swap, no per-stage reconfigure API yet

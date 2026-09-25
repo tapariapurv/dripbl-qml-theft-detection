@@ -193,10 +193,10 @@ class MockClips:
 
     LABELS = {"normal": "normal", "shoplifting": "theft"}
 
-    def __init__(self, mock_dir: str | Path, seed: int | None = None) -> None:
+    def __init__(self, mock_dir: str | Path, seed: int | None = None, only: set[str] | None = None) -> None:
         root = Path(mock_dir)
         self.clips = [(p, label) for folder, label in self.LABELS.items()
-                      for p in sorted((root / folder).glob("*.mp4"))]
+                      for p in sorted((root / folder).glob("*.mp4")) if only is None or p.stem in only]
         if not self.clips:
             raise FileNotFoundError(f"no mock clips under {root}/{{normal,shoplifting}}/*.mp4")
         self._rng = random.Random(seed)

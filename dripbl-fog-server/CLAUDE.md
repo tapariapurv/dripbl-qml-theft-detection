@@ -81,13 +81,36 @@ without taking down the others:
   `st.fragment(run_every=refresh_sec)` panels poll. That keeps it light enough for a Pi.
   All HTTP goes through `dashboard/lib.py`. Set `DRIPBL_DASHBOARD_PASSWORD` before exposing it on a network.
 
+Live judgement and experts:
+- The node judges **clips, not frames**: while there is motion it scores frames at `score_fps` and a
+  trial is judged on the mean margin of the last `judge_window_sec` (`TheftDetector.classify`), which
+  is how every accuracy number is measured. Motion models (6-channel) get the frame 0.33 s earlier
+  from `TheftDetector.observe`'s history.
+- `site_profile` picks the expert: `retail` -> `retail_model_path`, otherwise `model_path`; each
+  artifact also carries per-site clip thresholds. Changing the profile or deploying a new model file
+  (`src/deploy_model.py [--as retail]`) hot-swaps it; a corrupt file is rejected and the old model stays.
+- `crime_signal` is calibrated so that at default sensitivity the judge flags exactly at the model's
+  validated clip threshold (0.625 at the threshold x w_crime 0.8 = flag threshold 0.5).
+
+Tests (`tests/run_all.py` runs them all; `--data` adds accuracy on the datasets, `--soak` a 30-min soak):
+smoke, model self-check, API contract, robustness (odd frames, camera drop/reconnect, broken config,
+concurrent DB, retention, ~1000 junk API requests), node sabotage in a live process (bad config, dead
+cameras, deleted data dir, model hot-swap, SIGTERM), every dashboard page x {empty, populated, API down},
+and 500 concurrent live-video viewers.
+
 Gotchas:
+- A dead camera must never create trials: the grabber shows a static NO SIGNAL frame (zero motion) and
+  reconnects; the synthetic moving-square feed only runs when `camera_source` is "" or "synthetic".
+  Streams are opened on the capture thread with 5 s FFmpeg timeouts (OpenCV serialises opens).
+- `runtime_config.json` is the whole truth on reload: missing keys take defaults, invalid values keep the
+  previous value (`config.apply_changes`), shared by the node and `PUT /api/config`.
+- `/api/stream` must stay async: a sync generator holds a worker thread per viewer.
 - Settings hot-reload rebuilds `MotionDetector` (it copies ROI/MOG2/sensitivity at init; without the rebuild,
   ROI and sensitivity edits never reached the motion gate).
 - `FrameGrabber.read()` returns `None` when there is no new frame. Don't "fix" that: returning the last
   frame again made the loop re-classify duplicates at 100% CPU.
-- Mock-mode scores are per trial, on dataset-1, which the deployed model never trained on, so they
-  measure cross-source transfer. Expect far lower recall than the 0.871 UCF-Crime clip benchmark.
+- Mock mode replays all of dataset-1, including the clips the retail expert trained on. For an honest
+  retail number use `src/cross_data.py <model>` (fixed hold-out) rather than the mock scoreboard.
 
 ## Offline QSVM training pipeline (`src/`, `models/`, `reports/`)
 

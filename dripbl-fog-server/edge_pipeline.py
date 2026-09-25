@@ -81,11 +81,11 @@ class GaitAnalyzer:
     def __init__(self, window: int = 20) -> None:
         self._track: deque[tuple[float, float, float]] = deque(maxlen=window)
 
-    def update(self, centroid: tuple[float, float] | None) -> dict[str, float]:
+    def update(self, centroid: tuple[float, float] | None, now: float | None = None) -> dict[str, float]:
         if centroid is None:
             self._track.clear()
             return {"speed_px_s": 0.0, "stride_freq_hz": 0.0, "jitter_score": 0.0}
-        self._track.append((time.monotonic(), *centroid))
+        self._track.append((time.monotonic() if now is None else now, *centroid))
         if len(self._track) < 3:
             return {"speed_px_s": 0.0, "stride_freq_hz": 0.0, "jitter_score": 0.0}
 
@@ -149,11 +149,12 @@ class EdgePipeline:
         self._size = settings.cnn_input_size
         self._buf = np.empty((self._size, self._size, 3), dtype=np.float32)  # reused each call
 
-    def observe(self, frame: np.ndarray) -> tuple[bool, dict[str, float]]:
+    def observe(self, frame: np.ndarray, now: float | None = None) -> tuple[bool, dict[str, float]]:
         """Runs motion detection + gait tracking; call every frame regardless
-        of trigger state so the gait window stays continuous."""
+        of trigger state so the gait window stays continuous. `now` lets offline
+        replays use the video's own clock (gait speeds are per second)."""
         triggered, centroid = self._motion.detect(self._motion.crop_roi(frame))
-        gait = self._gait.update(centroid)
+        gait = self._gait.update(centroid, now)
         return triggered, gait
 
     def extract_features(self, frame: np.ndarray) -> np.ndarray:

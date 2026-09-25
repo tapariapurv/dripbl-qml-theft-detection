@@ -160,10 +160,13 @@ with tabs[1], st.form("source"):
     c1, c2 = st.columns([2, 1])
     mdir = c1.text_input("Mock clip folder", node["mock_dir"], help="Must contain normal/*.mp4 and shoplifting/*.mp4")
     mclip = c2.number_input("Max seconds per clip", 1.0, 3600.0, float(node["mock_clip_sec"]))
+    mhold = st.toggle("Replay only hold-out clips (honest scores)", node["mock_holdout_only"],
+                      help="The retail model trained on the other dataset-1 clips; replaying those would "
+                           "inflate the Research scoreboard.")
     if st.form_submit_button("Save source settings", type="primary"):
         save_node({"mode": mode or node["mode"], "camera_source": int(src) if src.strip().isdigit() else src.strip(),
                    "source_kind": kind, "frame_width": fw, "frame_height": fh, "loop_file": loop,
-                   "mock_dir": mdir, "mock_clip_sec": mclip})
+                   "mock_dir": mdir, "mock_clip_sec": mclip, "mock_holdout_only": mhold})
 
 # --- AI judge ------------------------------------------------------------------------------------
 with tabs[2]:

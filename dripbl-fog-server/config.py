@@ -84,6 +84,9 @@ class Settings:
     mode: str = "live"
     mock_dir: str = "../training-data/dataset-1"
     mock_clip_sec: float = 20.0
+    # replay only the dataset-1 hold-out clips (reports/dataset1_split.json): the retail expert
+    # trained on the others, so replaying them would inflate the live scoreboard
+    mock_holdout_only: bool = True
 
     # Command center: the node publishes to data_dir (SQLite + live frame + snapshots).
     data_dir: str = "data"
