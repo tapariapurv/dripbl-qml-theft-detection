@@ -14,6 +14,12 @@ if grep -qi raspberry /proc/device-tree/model 2>/dev/null; then
   sudo -u "$USER_NAME" "$DIR/.venv/bin/pip" install -q RPi.GPIO
 fi
 
+# Trained models live in a GitHub Release (too large for git); download + verify checksums
+if [ -f "$DIR/models/MANIFEST.json" ]; then
+  sudo -u "$USER_NAME" "$DIR/.venv/bin/python3" "$DIR/src/fetch_models.py" || \
+    echo "WARNING: could not fetch models (run 'gh auth login' as $USER_NAME, then src/fetch_models.py)"
+fi
+
 [ -f "$DIR/deploy/dripbl.env" ] || { cp "$DIR/deploy/dripbl.env.example" "$DIR/deploy/dripbl.env"; chmod 600 "$DIR/deploy/dripbl.env"; chown "$USER_NAME" "$DIR/deploy/dripbl.env"; }
 
 for svc in dripbl-node dripbl-api dripbl-dashboard; do

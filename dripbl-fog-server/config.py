@@ -74,6 +74,10 @@ class Settings:
     # Camera domain of this node. "retail" runs the retail expert model (store/counter cameras);
     # "cctv" and "default" run the general model; each also picks its calibrated clip threshold.
     site_profile: str = "default"
+    # "model": the expert's own validated clip threshold; "calibrated": calibrated_threshold,
+    # learned from this camera's normal activity (POST /api/calibrate, Settings -> Calibrate)
+    threshold_mode: str = "model"
+    calibrated_threshold: float = 0.0
     score_fps: float = 4.0
     judge_window_sec: float = 2.0
 
@@ -112,14 +116,14 @@ RANGES: dict[str, tuple[float, float]] = {
     "mog2_history": (1, 10000), "mog2_var_threshold": (1.0, 1000.0), "live_frame_fps": (0.0, 30.0),
     "live_jpeg_quality": (10, 100), "mock_clip_sec": (1.0, 3600.0), "nervous_speed_px_s": (1.0, 1e5),
     "heartbeat_sec": (0.2, 60.0), "thumbnail_jpeg_quality": (10, 100), "request_timeout_sec": (0.1, 60.0),
-    "score_fps": (0.5, 30.0), "judge_window_sec": (0.25, 30.0),
+    "score_fps": (0.5, 30.0), "judge_window_sec": (0.25, 30.0), "calibrated_threshold": (-1000.0, 1000.0),
     "frame_width": (16, 7680), "frame_height": (16, 4320), "buzzer_pin": (0, 40), "led_pin": (0, 40),
     **{w: (0.0, 1.0) for w in ("w_crime", "w_nervous", "w_speed", "fb_w_crime", "fb_w_nervous",
                                "fb_w_speed", "fb_w_person_bonus")},
 }
 CHOICES: dict[str, tuple[str, ...]] = {
     "mode": ("live", "mock"), "source_kind": ("auto", "camera", "stream", "file"),
-    "site_profile": ("default", "cctv", "retail"),
+    "site_profile": ("default", "cctv", "retail"), "threshold_mode": ("model", "calibrated"),
 }
 _FIELDS = {f.name for f in fields(Settings)}
 

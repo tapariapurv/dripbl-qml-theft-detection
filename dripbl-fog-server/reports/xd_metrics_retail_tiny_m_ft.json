@@ -1,0 +1,96 @@
+{
+  "artifact": "models/candidates/retail_tiny_m_ft.joblib",
+  "config": {
+    "name": "retail_tiny_m_ft",
+    "backbone": "tiny",
+    "motion": true,
+    "input_size": 64,
+    "epochs": 10,
+    "steps_per_epoch": 200,
+    "batch": 128,
+    "lr": 0.0008,
+    "weight_decay": 0.0005,
+    "dropout": 0.5,
+    "share": [
+      0.0,
+      0.85,
+      0.15
+    ],
+    "d3_frames": 20,
+    "fit_per_label": 1500,
+    "seed": 42,
+    "size": 64,
+    "sources": [
+      "d1",
+      "d2"
+    ],
+    "init_from": "models/qsvm_model.joblib"
+  },
+  "folds": 5,
+  "threshold": 0.13961390680667501,
+  "oof_clip_auc": {
+    "d1": 0.914039039039039,
+    "d2": 0.11111111111111112
+  },
+  "oof_clip_acc": {
+    "d1": 0.8493150684931506
+  },
+  "site_thresholds": {
+    "default": 0.13961390680667501,
+    "retail": 0.159125
+  },
+  "holdout": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.6701030927835051,
+      "recall": 0.36363636363636365,
+      "fp": 36,
+      "fn": 28,
+      "auc": 0.5453030303030303
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.8333333333333334,
+      "recall": 0.8333333333333334,
+      "fp": 3,
+      "fn": 3,
+      "auc": 0.8734567901234568
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 0.0,
+      "fp": 0,
+      "fn": 1,
+      "auc": 1.0
+    }
+  },
+  "holdout_site_calibrated": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.6701030927835051,
+      "recall": 0.36363636363636365,
+      "fp": 36,
+      "fn": 28,
+      "auc": 0.5453030303030303
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.8333333333333334,
+      "recall": 0.8333333333333334,
+      "fp": 3,
+      "fn": 3,
+      "auc": 0.8734567901234568
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 0.0,
+      "fp": 0,
+      "fn": 1,
+      "auc": 1.0
+    }
+  },
+  "minutes": 41.3,
+  "protocol": "k-fold by video over dataset-3 Train + dataset-1 train split + dataset-2 train clips; threshold from pooled out-of-fold clips; hold-outs scored once via LiveTheftClassifier"
+}

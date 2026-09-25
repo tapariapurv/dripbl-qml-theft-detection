@@ -119,6 +119,22 @@ def test_camera_reconnect() -> None:
     print("ok: camera drop -> NO SIGNAL -> automatic reconnect")
 
 
+def test_slow_hardware_still_alerts() -> None:
+    """A Pi that can only score ~1 frame/s must still get judgements (window readiness is
+    time-based, not a frame count derived from score_fps)."""
+    from theft_detector import TheftDetector
+    det = TheftDetector(Settings(score_fps=4.0, judge_window_sec=2.0))
+    f = np.random.default_rng(0).integers(0, 255, (480, 640, 3), dtype=np.uint8)
+    t = 0.0
+    for _ in range(3):  # achieved rate: 1 score per second, a quarter of the configured 4/s
+        det.observe(f, t)
+        det.score(f, t)
+        t += 1.0
+    assert det.window_ready(t - 1.0), "slow scorer never becomes ready to judge"
+    assert not TheftDetector(Settings()).window_ready(0.0)
+    print("ok: slow hardware (1 score/s vs configured 4/s) still produces judgements")
+
+
 def test_config() -> None:
     path = tmp / "cfg_test.json"
     # broken JSON at startup -> defaults, reason recorded, file left alone for a human
@@ -280,6 +296,7 @@ def test_api_fuzz() -> None:
 if __name__ == "__main__":
     test_frames()
     test_camera_reconnect()
+    test_slow_hardware_still_alerts()
     test_config()
     test_store_concurrency()
     test_retention()

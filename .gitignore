@@ -37,3 +37,5 @@ dripbl-fog-server/models/shoplifting_model.joblib
 # Model backups and experiment candidates (large, regenerable; the deployed model is tracked)
 dripbl-fog-server/models/backup/
 dripbl-fog-server/models/candidates/
+# Model binaries are published as GitHub Release assets (src/publish_models.py); models/MANIFEST.json is tracked
+dripbl-fog-server/models/*.joblib

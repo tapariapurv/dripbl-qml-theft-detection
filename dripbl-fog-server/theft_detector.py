@@ -71,7 +71,9 @@ class TheftDetector:
 
     @property
     def threshold(self) -> float:
-        """Clip threshold for the configured site profile (falls back to the model default)."""
+        """Camera-calibrated threshold if enabled, else the model's threshold for the site profile."""
+        if self._settings.threshold_mode == "calibrated":
+            return self._settings.calibrated_threshold
         return self._thresholds.get(self._settings.site_profile, self._default_threshold)
 
     def observe(self, frame_bgr: np.ndarray, now: float | None = None) -> None:
@@ -106,9 +108,16 @@ class TheftDetector:
             self._window.popleft()
 
     def window_frames(self, now: float) -> int:
-        """Scored frames inside the judgement window (the node waits for enough of them)."""
+        """Scored frames inside the judgement window."""
         self._prune(now)
         return len(self._window)
+
+    def window_ready(self, now: float) -> bool:
+        """Enough evidence to judge a clip: >= 2 scored frames spanning >= half the window.
+        Time-based on purpose: on slow hardware (a Pi scoring ~1 frame/s) a frame-count rule
+        derived from score_fps would never be met and the node would never alert."""
+        self._prune(now)
+        return len(self._window) >= 2 and now - self._window[0][0] >= self._settings.judge_window_sec / 2
 
     def classify(self, frame_bgr: np.ndarray, now: float | None = None) -> dict:
         now = time.monotonic() if now is None else now

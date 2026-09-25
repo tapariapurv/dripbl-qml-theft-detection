@@ -36,6 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
+import numpy as np  # noqa: E402
+
 import store  # noqa: E402
 from api import app_settings, quantum_check  # noqa: E402
 from api.worker import Worker, send_notifications  # noqa: E402
@@ -317,6 +319,44 @@ def reset_app_settings(section: str | None = None) -> dict[str, Any]:
         return app_settings.masked(app_settings.reset(section))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+# --- camera calibration ---------------------------------------------------------
+
+class Calibrate(BaseModel):
+    minutes: float = Field(30.0, gt=0, le=7 * 24 * 60, description="use trials from this many past minutes")
+    quantile: float = Field(0.98, ge=0.5, le=1.0, description="share of normal windows to stay below")
+    apply: bool = Field(False, description="switch the node to the calibrated threshold")
+
+
+@app.post("/api/calibrate", tags=["config"], dependencies=write)
+def calibrate(body: Calibrate) -> dict[str, Any]:
+    """Learn this camera's alert threshold from a period of NORMAL activity.
+
+    Every trial stores the mean model margin of its judgement window. The threshold is
+    set just above what normal activity on this camera reaches (the `quantile` of those
+    window means), so everyday movement stops raising alerts while theft-like windows
+    still exceed it. Only run it over a period you know contained no theft."""
+    rows = store.list_trials(DB, since=time.time() - body.minutes * 60, limit=100000, full=True)
+    means = np.array([w["mean_margin"] for r in rows
+                      if (w := (r["payload"].get("quantum") or {}).get("window")) and "mean_margin" in w])
+    if len(means) < 20:
+        raise HTTPException(422, f"only {len(means)} scored windows in the last {body.minutes:g} min; "
+                                 "need at least 20 (let the camera watch normal activity longer)")
+    spread = float(np.subtract(*np.percentile(means, [75, 25]))) or 1e-3
+    threshold = float(np.quantile(means, body.quantile) + 0.1 * spread)  # a little headroom above normal
+    cfg = ConfigStore(CONFIG_PATH)
+    current = rows[0]["payload"]["quantum"]["window"].get("clip_threshold")
+    result = {"windows": int(len(means)), "minutes": body.minutes, "quantile": body.quantile,
+              "threshold": threshold, "previous_threshold": current,
+              "normal_windows_above_previous": float((means > current).mean()) if current is not None else None,
+              "normal_windows_above_new": float((means > threshold).mean()), "applied": False}
+    if body.apply:
+        new, _ = apply_changes(cfg.settings, {"threshold_mode": "calibrated", "calibrated_threshold": threshold},
+                               strict=True)
+        cfg.save(new)
+        result["applied"] = True
+    return result
 
 
 # --- research -------------------------------------------------------------------

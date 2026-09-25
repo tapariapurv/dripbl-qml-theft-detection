@@ -41,14 +41,28 @@ def main() -> None:
     frame = np.random.default_rng(0).integers(0, 255, (480, 640, 3), dtype=np.uint8)
     r = clf.predict_frame(frame, frame if clf.in_channels == 6 else None)
     assert np.isfinite(r["margin"]) and len(r["features_4d"]) == 4, "candidate produced invalid output"
-    meta = joblib.load(cand)["metadata"]
+    art = joblib.load(cand)
+    meta = art["metadata"]
+
+    # store encoder weights as float16 (half the file; inference still runs in float32) and
+    # refuse the conversion if it moves any margin noticeably
+    for m in art["ensemble"]:
+        for key in ("backbone_state", "cnn_state_dict"):
+            if key in m:
+                m[key] = {k: v.half() if v.is_floating_point() else v for k, v in m[key].items()}
+    half = live.with_suffix(".half.tmp")
+    joblib.dump(art, half, compress=3)
+    probe = np.random.default_rng(1).integers(0, 255, (64, 64, 64, clf.in_channels), dtype=np.uint8)
+    drift = float(np.abs(clf.margins_from_arrays(probe) - LiveTheftClassifier(half).margins_from_arrays(probe)).max())
+    assert drift < 0.02, f"float16 storage changes margins by {drift:.4f}; not deploying"
+    print(f"float16 storage: max margin change {drift:.5f}, {cand.stat().st_size / 1e6:.0f} MB -> "
+          f"{half.stat().st_size / 1e6:.0f} MB")
     if live.exists():
         backup = ROOT / "models" / "backup" / f"{live.stem}_{time.strftime('%Y%m%d_%H%M%S')}.joblib"
         backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(live, backup)
         print(f"backed up current model -> {backup.relative_to(ROOT)}")
-    shutil.copy2(cand, live.with_suffix(".tmp"))
-    live.with_suffix(".tmp").replace(live)
+    half.replace(live)
     summary = {k: meta.get(k) for k in ("experiment", "ensemble_size", "in_channels", "clip_threshold",
                                          "clip_thresholds", "holdout", "holdout_site_calibrated", "training")}
     summary["deployed_at"] = time.time()

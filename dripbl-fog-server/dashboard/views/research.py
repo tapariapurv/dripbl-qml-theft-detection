@@ -42,7 +42,7 @@ def rates(cm: dict) -> dict[str, float | None]:
 
 
 tab_model, tab_xd, tab_mock, tab_hw, tab_exp = st.tabs(
-    [":material/verified: Deployed model", ":material/public: Cross-dataset", ":material/play_circle: Mock-mode scoreboard",
+    [":material/verified: UCF-Crime benchmark", ":material/public: Cross-dataset (deployed)", ":material/play_circle: Mock-mode scoreboard",
      ":material/memory: Hardware feasibility", ":material/lab_panel: Experiment log"])
 
 NAMES = {"dataset3_test": "UCF-Crime Test (CCTV)", "dataset1_holdout": "Retail hold-out (dataset-1)",
@@ -74,7 +74,8 @@ with tab_model:
         st.info("reports/metrics.json not found — run `src/train_final.py`.")
     else:
         c = m["clip"]
-        st.caption(f"{m['model']} · {m['protocol']}")
+        st.caption(f"The original single-dataset model (reports/metrics.json): {m['model']} · {m['protocol']}. "
+                   "The models the node runs now are on the Cross-dataset tab.")
         k = st.columns(6)
         k[0].metric("Clip accuracy", f"{c['accuracy']:.1%}", help=f"{c['n_clips']} unseen test clips")
         k[1].metric("ROC AUC", f"{c['roc_auc']:.3f}")

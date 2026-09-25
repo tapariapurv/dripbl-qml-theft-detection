@@ -73,8 +73,21 @@ with TestClient(app) as client:
     assert "sk-secret" not in client.get("/api/app-settings").text
     assert client.put("/api/app-settings", json={"dashboard": {"refresh_sec": "x"}}, headers=KEY).status_code == 422
 
+    # camera calibration: refuses on too little data, learns a threshold above normal windows
+    assert client.post("/api/calibrate", json={"minutes": 60}, headers=KEY).status_code == 422
+    rng = __import__("random").Random(3)
+    for i in range(40):
+        pl = fake_payload(f"cal{i}", False)
+        pl["quantum"]["window"] = {"mean_margin": rng.gauss(-1.0, 0.3), "clip_threshold": 0.2, "frames": 8}
+        store.insert_trial(DB, pl)
+    cal = client.post("/api/calibrate", json={"minutes": 60, "quantile": 0.98, "apply": True}, headers=KEY).json()
+    assert cal["applied"] and cal["windows"] >= 40 and cal["normal_windows_above_new"] <= 0.03, cal
+    cfg = client.get("/api/config").json()
+    assert cfg["threshold_mode"] == "calibrated" and abs(cfg["calibrated_threshold"] - cal["threshold"]) < 1e-9
+    client.put("/api/config", json={"threshold_mode": "model"}, headers=KEY)
+
     st = client.get("/api/stats").json()
-    assert st["n"] == 2 and st["mock_confusion"] == {"tn": 1, "fp": 0, "fn": 0, "tp": 1}
+    assert st["n"] == 42 and st["mock_confusion"] == {"tn": 1, "fp": 0, "fn": 0, "tp": 1}
     assert client.get("/api/trials.csv").text.startswith("id,ts,flagged")
     assert client.get("/api/research/metrics").json()["clip"]["accuracy"] > 0.8
 

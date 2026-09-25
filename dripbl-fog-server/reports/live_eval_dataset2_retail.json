@@ -1,0 +1,30 @@
+{
+  "summary": {
+    "set": "dataset2",
+    "profile": "retail",
+    "model": "5-member xd_retail_tiny_m_ft_5fold (clip 0.670, motion)",
+    "clips": 2,
+    "accuracy": 0.5,
+    "thefts_caught": 1,
+    "thefts": 1,
+    "false_alarms": 1,
+    "normals": 1,
+    "auc_max_suspicion": 1.0
+  },
+  "clips": [
+    {
+      "clip": "not_shoplifting4",
+      "label": 0,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.7443119367710218
+    },
+    {
+      "clip": "shoplifting4",
+      "label": 1,
+      "trials": 3,
+      "alert": true,
+      "max_suspicion": 0.7506178964793422
+    }
+  ]
+}

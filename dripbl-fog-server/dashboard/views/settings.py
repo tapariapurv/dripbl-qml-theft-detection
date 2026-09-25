@@ -141,6 +141,32 @@ with tabs[0]:
         except lib.APIError:
             st.caption("Start the node to preview the ROI on a live frame.")
 
+        st.markdown("##### Calibrate to this camera")
+        mode_now = node["threshold_mode"]
+        st.caption("Every camera's normal activity looks a little different. Calibration learns the alert "
+                   "threshold from a period of **normal** activity on this camera, so everyday movement stops "
+                   "raising alerts. Only use a period with no theft in it.")
+        st.html(lib.pill(f"threshold: {'calibrated ' + format(node['calibrated_threshold'], '+.3f') if mode_now == 'calibrated' else 'model default'}",
+                         "accent" if mode_now == "calibrated" else ""))
+        with st.form("calibrate"):
+            c1, c2 = st.columns(2)
+            minutes = c1.number_input("Use the last (minutes)", 1.0, 10080.0, 30.0, 5.0)
+            quant = c2.slider("Stay above this share of normal windows", 0.80, 1.0, 0.98, 0.01)
+            b1, b2 = st.columns(2)
+            preview_cal = b1.form_submit_button("Preview", width="stretch")
+            apply_cal = b2.form_submit_button("Calibrate & apply", type="primary", width="stretch")
+            if preview_cal or apply_cal:
+                try:
+                    r = lib.api("POST", "/api/calibrate", json={"minutes": minutes, "quantile": quant, "apply": apply_cal})
+                    prev = r["normal_windows_above_previous"]
+                    st.success(f"{r['windows']} normal windows → threshold {r['threshold']:+.3f}. Normal windows that "
+                               f"would alert: {'—' if prev is None else f'{prev:.0%}'} before, "
+                               f"{r['normal_windows_above_new']:.0%} after." + (" Applied." if r["applied"] else ""))
+                except lib.APIError as exc:
+                    st.error(str(exc))
+        if mode_now == "calibrated" and st.button("Use the model's own threshold again"):
+            save_node({"threshold_mode": "model"})
+
 # --- Source & mode ------------------------------------------------------------------------------
 with tabs[1], st.form("source"):
     mode = st.segmented_control("Mode", ["live", "mock"], default=node["mode"],

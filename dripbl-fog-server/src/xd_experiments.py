@@ -71,6 +71,7 @@ class Cfg:
     seed: int = 42
     size: int = 64                    # frame resolution; dataset-3 (64 px only) is upsampled to it
     sources: tuple[str, ...] = ("d3", "d1", "d2")   # datasets to train on (single-dataset studies)
+    init_from: str = ""               # start the encoder from this model's weights (transfer learning)
 
 
 CONFIGS = {c.name: c for c in [
@@ -92,6 +93,14 @@ CONFIGS = {c.name: c for c in [
         sources=("d3",), share=(1.0, 0.0, 0.0)),
     # a cheap, differently-biased partner for ensembling with retail_r18m (same seed -> same folds)
     Cfg("retail_tiny_m", motion=True, epochs=10, steps_per_epoch=200, sources=("d1", "d2"), share=(0.0, 0.85, 0.15)),
+    # transfer: learn "crime" on UCF-Crime first (CCTV experts, no retail data), then specialise on retail
+    Cfg("retail_r18m_ft", backbone="resnet18", motion=True, input_size=128, lr=1.5e-4, epochs=4, steps_per_epoch=200,
+        sources=("d1", "d2"), share=(0.0, 0.85, 0.15), init_from="models/candidates/cctv_r18.joblib"),
+    Cfg("retail_tiny_m_ft", motion=True, epochs=10, steps_per_epoch=200, lr=8e-4, sources=("d1", "d2"),
+        share=(0.0, 0.85, 0.15), init_from="models/candidates/ucf_tiny_original.joblib"),
+    # zero-shot camera test: never sees dataset-2, then scored on all 8 of its videos
+    Cfg("retail_tiny_m_ft_d1only", motion=True, epochs=10, steps_per_epoch=200, lr=8e-4, sources=("d1",),
+        share=(0.0, 1.0, 0.0), init_from="models/candidates/ucf_tiny_original.joblib"),
 ]}
 
 
@@ -208,10 +217,37 @@ def per_source_clip_auc(scores: np.ndarray, d: dict) -> dict[str, float]:
     return out
 
 
+def init_backbone(model: nn.Module, path: str) -> int:
+    """Copy encoder weights from a trained artifact (member 0) into `model.backbone`.
+    A 3-channel stem feeding a 6-channel model gets its RGB filters copied to the motion
+    channels at half strength (same rule as ImageNet init). Returns tensors copied."""
+    art = joblib.load(ROOT / path)
+    member = (art.get("ensemble") or [art])[0]
+    src = member.get("backbone_state") or {f"net.{k}": v for k, v in member["cnn_state_dict"].items()}
+    dst = model.backbone.state_dict()
+    copied = 0
+    for k, v in dst.items():
+        w = src.get(k)
+        if w is None:
+            continue
+        if w.shape == v.shape:
+            dst[k] = w.clone()
+        elif w.dim() == 4 and w.shape[1] == 3 and v.shape[1] == 6 and w.shape[0] == v.shape[0]:
+            dst[k] = torch.cat([w, w * 0.5], 1)
+        else:
+            continue
+        copied += 1
+    model.backbone.load_state_dict(dst)
+    return copied
+
+
 def train(cfg: Cfg, fit: dict, val: dict) -> tuple[nn.Module, dict]:
     torch.manual_seed(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
-    model = Net(cfg, fit["x"].shape[-1]).to(DEVICE)
+    model = Net(cfg, fit["x"].shape[-1])
+    if cfg.init_from:
+        print(f"    encoder initialised from {cfg.init_from}: {init_backbone(model, cfg.init_from)} tensors", flush=True)
+    model = model.to(DEVICE)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     total = cfg.epochs * cfg.steps_per_epoch
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=cfg.lr, total_steps=total)

@@ -233,8 +233,7 @@ def run() -> None:
                     _write_jpeg(live_path, _annotate(frame, settings, alert_on), settings.live_jpeg_quality)
                     last_frame_pub = now
 
-                window_ready = theft is None or theft.window_frames(now) >= max(
-                    2, int(settings.score_fps * settings.judge_window_sec / 2))  # judge a clip, not one frame
+                window_ready = theft is None or theft.window_ready(now)  # judge a clip, not one frame
                 if not (triggered and window_ready and now - last_trigger >= settings.debounce_sec) \
                         or last_kind in ("offline", "connecting"):
                     if not alert_on:

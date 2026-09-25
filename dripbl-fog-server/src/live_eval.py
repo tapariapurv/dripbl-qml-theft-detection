@@ -38,7 +38,36 @@ def clips(which: str) -> list[tuple[Path, int]]:
         return [(p, label) for folder, label in (("normal", 0), ("shoplifting", 1))
                 for p in sorted((C.DATA / "dataset-1" / folder).glob("*.mp4")) if f"d1:{p.stem}" in hold]
     return [(p, 0 if p.stem.startswith("not_") else 1) for p in sorted((C.DATA / "dataset-2" / "videos").glob("*.mp4"))
-            if p.stem in C.D2_HOLDOUT]
+            if which == "dataset2all" or p.stem in C.D2_HOLDOUT]
+
+
+def calibration_windows(settings: Settings, det: TheftDetector) -> list[float]:
+    """Window means seen while replaying dataset-2's TRAINING normal videos (never the hold-out),
+    one per scored frame: what POST /api/calibrate learns from on a real camera."""
+    means = []
+    for p in sorted((C.DATA / "dataset-2" / "videos").glob("not_*.mp4")):
+        if p.stem in C.D2_HOLDOUT:
+            continue
+        cap, i, fps = cv2.VideoCapture(str(p)), 0, 30.0
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        pipe, last = EdgePipeline(settings), -1e9
+        det._history.clear()
+        det._window.clear()
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            now, frame = i / fps, to_bgr8(frame)
+            i += 1
+            triggered, _ = pipe.observe(frame, now)
+            det.observe(frame, now)
+            if triggered and now - last >= 1.0 / settings.score_fps:
+                det.score(frame, now)
+                last = now
+                if det.window_frames(now) >= 2:
+                    means.append(float(np.mean([m for _, m in det._window])))
+        cap.release()
+    return means
 
 
 def replay(path: Path, settings: Settings, det: TheftDetector, judge: AIJudge) -> dict:
@@ -60,7 +89,7 @@ def replay(path: Path, settings: Settings, det: TheftDetector, judge: AIJudge) -
         if triggered and now - last_score >= 1.0 / settings.score_fps:
             det.score(frame, now)
             last_score = now
-        ready = det.window_frames(now) >= max(2, int(settings.score_fps * settings.judge_window_sec / 2))
+        ready = det.window_ready(now)
         if triggered and ready and now - last_trigger >= settings.debounce_sec:
             q = det.classify(frame, now)
             last_score = now
@@ -76,9 +105,12 @@ def replay(path: Path, settings: Settings, det: TheftDetector, judge: AIJudge) -
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", default="retail", choices=["default", "cctv", "retail"])
-    ap.add_argument("--set", default="dataset1", choices=["dataset1", "dataset2"])
+    ap.add_argument("--set", default="dataset1", choices=["dataset1", "dataset2", "dataset2all"],
+                    help="dataset2all = every dataset-2 video (only for models that never trained on it)")
     ap.add_argument("--sensitivity", type=float, default=None)
     ap.add_argument("--model", help="evaluate this artifact instead of the installed one")
+    ap.add_argument("--calibrate", action="store_true",
+                    help="dataset2: calibrate the threshold on its training normal videos first")
     args = ap.parse_args()
     base = ConfigStore().settings
     over = {"sensitivity": args.sensitivity} if args.sensitivity is not None else {}
@@ -86,6 +118,13 @@ def main() -> None:
         over["retail_model_path" if args.profile == "retail" else "model_path"] = str(Path(args.model).resolve())
     settings = dataclasses.replace(base, site_profile=args.profile, roi=(0, 0, 10000, 10000), **over)  # whole frame
     det, judge = TheftDetector(settings), AIJudge(settings)
+    if args.calibrate:
+        means = np.array(calibration_windows(settings, det))
+        spread = float(np.subtract(*np.percentile(means, [75, 25]))) or 1e-3
+        cal = float(np.quantile(means, 0.98) + 0.1 * spread)  # same rule as POST /api/calibrate
+        settings = dataclasses.replace(settings, threshold_mode="calibrated", calibrated_threshold=cal)
+        det._settings, judge._settings = settings, settings
+        print(f"calibrated on {len(means)} normal windows from training videos -> threshold {cal:+.3f}")
     print(f"model: {det.description} · profile {args.profile} · threshold {det.threshold:+.3f} · "
           f"sensitivity {settings.sensitivity}", flush=True)
     rows = []
