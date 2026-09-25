@@ -1,0 +1,16 @@
+# REST API (+ notification / AI-review worker). Docs at http://<pi>:8000/docs
+[Unit]
+Description=DRIPBL API server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+EnvironmentFile=-@DIR@/deploy/dripbl.env
+ExecStart=@DIR@/.venv/bin/python3 -m uvicorn api.server:app --host ${DRIPBL_HOST} --port ${DRIPBL_API_PORT} --log-level warning
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+reports/feature_cache.npz
+reports/*.log
+trials.log
+reports/dataset1_frames.npz
+models/shoplifting_model.joblib
+
+# command center runtime state (DB, live frame, snapshots, API key) and secrets
+data/
+app_settings.json
+*.tmp
+deploy/dripbl.env
+runtime_config.json

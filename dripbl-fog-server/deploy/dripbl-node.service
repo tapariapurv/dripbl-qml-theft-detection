@@ -1,0 +1,21 @@
+# Fog node: camera -> motion/gait -> CNN -> PLS -> QSVM ensemble -> AI judge -> DB/GPIO.
+# Installed by deploy/install.sh, which fills in @USER@ and @DIR@.
+[Unit]
+Description=DRIPBL fog node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+EnvironmentFile=-@DIR@/deploy/dripbl.env
+ExecStart=@DIR@/.venv/bin/python3 -u main.py
+Restart=always
+RestartSec=3
+# SIGTERM is handled as a clean shutdown (GPIO off, camera released)
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

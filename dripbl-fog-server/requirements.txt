@@ -1,0 +1,23 @@
+torch==2.3.1
+opencv-python-headless==4.10.0.84
+requests==2.32.3
+
+# offline QSVM training pipeline (src/train_qsvm.py, src/inference.py) —
+# qiskit 2.x requires numpy>=2.0, so numpy is left to resolve to that (2.4.6
+# at last install) rather than pinned to the older edge-node baseline.
+numpy==2.4.6
+qiskit==2.5.2
+qiskit-aer==0.17.2
+qiskit-machine-learning==0.9.1
+qiskit-ibm-runtime==0.45.1
+scikit-learn==1.9.1
+joblib==1.6.0
+matplotlib==3.11.1
+
+# command center: API server + dashboard (api/, dashboard/, start.py)
+fastapi
+uvicorn
+streamlit
+plotly
+httpx          # FastAPI TestClient (tests/test_api.py)
+anthropic      # only imported when judge_mode = "rules+claude"
