@@ -1,0 +1,35 @@
+# --- Datasets: 13 GB of video/frames. Never committed; see README "Data". ---
+training-data/
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Runtime state the running system rewrites every second (keeps `git status` quiet) ---
+# SQLite trials DB, live.jpg, snapshots, api_key
+data/
+trials.log
+# recreated with defaults on first run; edit it through the dashboard
+runtime_config.json
+# dashboard / notification settings, may hold secrets
+app_settings.json
+# Pi service environment, may hold secrets
+deploy/dripbl.env
+*.tmp
+*.db
+*.db-wal
+*.db-shm
+
+# --- Large generated caches (rebuilt by the training scripts) ---
+*.npz
+reports/*.log
+dripbl-fog-server/models/shoplifting_model.joblib
+
+# Stray node output from runs started in the project root
+/class_prototypes.json
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/
