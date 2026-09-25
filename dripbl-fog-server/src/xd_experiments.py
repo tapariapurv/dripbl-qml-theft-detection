@@ -30,6 +30,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import torch
+import cv2
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
@@ -40,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import cross_data as C  # noqa: E402
 import experiments as E  # noqa: E402
 import train_qsvm as T  # noqa: E402
-from edge_pipeline import LightweightCNN  # noqa: E402
+from backbones import Backbone  # noqa: E402
 from pca_projector import PCAAngleProjector  # noqa: E402
 from quantum_kernel import FEATURE_DIM, encode, kernel_matrix  # noqa: E402
 
@@ -68,6 +69,8 @@ class Cfg:
     d3_frames: int = 20
     fit_per_label: int = 1500         # QSVM training frames per class (Gram matrix is O(n^2))
     seed: int = 42
+    size: int = 64                    # frame resolution; dataset-3 (64 px only) is upsampled to it
+    sources: tuple[str, ...] = ("d3", "d1", "d2")   # datasets to train on (single-dataset studies)
 
 
 CONFIGS = {c.name: c for c in [
@@ -77,6 +80,16 @@ CONFIGS = {c.name: c for c in [
     Cfg("resnet18_motion", backbone="resnet18", motion=True, input_size=112, lr=3e-4, epochs=8),
     Cfg("mobilenet_rgb", backbone="mobilenet", input_size=112, lr=5e-4, epochs=8),
     Cfg("mobilenet_motion", backbone="mobilenet", motion=True, input_size=112, lr=5e-4, epochs=8),
+    # resolution study on retail alone: identical except frame size
+    Cfg("d1_r18m_64", backbone="resnet18", motion=True, input_size=128, lr=3e-4, epochs=6, steps_per_epoch=200,
+        sources=("d1",), share=(0.0, 1.0, 0.0)),
+    Cfg("d1_r18m_128", backbone="resnet18", motion=True, input_size=128, lr=3e-4, epochs=6, steps_per_epoch=200,
+        sources=("d1",), share=(0.0, 1.0, 0.0), size=128),
+    # per-domain experts (joint training let dataset-3's 20k frames pull the encoder away from retail)
+    Cfg("retail_r18m", backbone="resnet18", motion=True, input_size=128, lr=3e-4, epochs=4, steps_per_epoch=200,
+        sources=("d1", "d2"), share=(0.0, 0.85, 0.15)),
+    Cfg("cctv_r18", backbone="resnet18", input_size=112, lr=3e-4, epochs=4, steps_per_epoch=300,
+        sources=("d3",), share=(1.0, 0.0, 0.0)),
 ]}
 
 
@@ -111,10 +124,13 @@ def load_train(cfg: Cfg) -> tuple[dict, dict]:
     def add(part: str, x, y, vid, src: str) -> None:
         parts[part].append({"x": x, "y": y, "vid": vid, "src": np.full(len(y), src)})
 
-    for part, frames in (("fit", cfg.d3_frames), ("val", 10)):
-        d = _d3(part, frames, cfg.motion)
-        add(part, d["x"], d["y"], d["vid"], "d3")
-    for src, d in (("d1", C.dataset1_part("train")), ("d2", C.dataset2_part("train"))):
+    if "d3" in cfg.sources:
+        for part, frames in (("fit", cfg.d3_frames), ("val", 10)):
+            d = _d3(part, frames, cfg.motion)
+            add(part, _resize(d["x"], cfg.size), d["y"], d["vid"], "d3")
+    for src, d in (("d1", C.dataset1_part("train", cfg.size)), ("d2", C.dataset2_part("train", cfg.size))):
+        if src not in cfg.sources:
+            continue
         x = np.concatenate([d["rgb"], d["motion"]], -1) if cfg.motion else d["rgb"]
         val = _split_videos(d["vid"], d["y"], 0.15 if src == "d1" else 0.34, cfg.seed)
         add("fit", x[~val], d["y"][~val], d["vid"][~val], src)
@@ -123,66 +139,47 @@ def load_train(cfg: Cfg) -> tuple[dict, dict]:
     return cat(parts["fit"]), cat(parts["val"])
 
 
-def load_holdouts(motion: bool) -> dict[str, dict]:
-    sets = {"d3": C.load_dataset3_test(60), "d1": C.dataset1_part("holdout"), "d2": C.dataset2_part("holdout")}
+def _resize(x: np.ndarray, size: int) -> np.ndarray:
+    """Upsample 64 px frames (dataset-3) to the experiment's resolution; no-op at 64."""
+    if x.shape[1] == size:
+        return x
+    return np.stack([cv2.resize(f, (size, size), interpolation=cv2.INTER_LINEAR) for f in x])
+
+
+def load_holdouts(motion: bool, size: int = 64) -> dict[str, dict]:
+    sets = {"d3": C.load_dataset3_test(60), "d1": C.dataset1_part("holdout", size),
+            "d2": C.dataset2_part("holdout", size)}
     for d in sets.values():
-        d["x"] = np.concatenate([d["rgb"], d["motion"]], -1) if motion else d["rgb"]
+        d["x"] = _resize(np.concatenate([d["rgb"], d["motion"]], -1) if motion else d["rgb"], size)
     return sets
 
 
 # ---------------------------------------------------------------------------- model
 
-_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-_STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-
-
-class Backbone(nn.Module):
-    """uint8-scaled (B, C, 64, 64) in [0, 1] -> (B, 128) latent."""
-
-    def __init__(self, kind: str, channels: int, input_size: int) -> None:
-        super().__init__()
-        self.kind, self.channels, self.input_size = kind, channels, input_size
-        if kind == "tiny":
-            self.net = LightweightCNN(128, channels)
-            return
-        from torchvision import models
-        if kind == "resnet18":
-            m = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-            stem, feat_dim = m.conv1, 512
-            m.fc = nn.Identity()
-        else:
-            m = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)
-            stem, feat_dim = m.features[0][0], 576
-            m.classifier = nn.Identity()
-        if channels != 3:  # motion channels start from the RGB filters, scaled down
-            new = nn.Conv2d(channels, stem.out_channels, stem.kernel_size, stem.stride, stem.padding, bias=False)
-            with torch.no_grad():
-                new.weight[:, :3] = stem.weight
-                new.weight[:, 3:] = stem.weight * 0.5
-            if kind == "resnet18":
-                m.conv1 = new
-            else:
-                m.features[0][0] = new
-        self.net = nn.Sequential(m, nn.Linear(feat_dim, 128))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.kind == "tiny":
-            return self.net(x)
-        rgb = (x[:, :3] - _MEAN.to(x.device)) / _STD.to(x.device)
-        x = torch.cat([rgb, (x[:, 3:] - 0.5) / 0.25], 1) if self.channels > 3 else rgb
-        if self.input_size != x.shape[-1]:
-            x = F.interpolate(x, size=self.input_size, mode="bilinear", align_corners=False)
-        return self.net(x)
-
-
 class Net(nn.Module):
     def __init__(self, cfg: Cfg, channels: int) -> None:
         super().__init__()
-        self.backbone = Backbone(cfg.backbone, channels, cfg.input_size)
+        self.backbone = Backbone(cfg.backbone, channels, cfg.input_size, pretrained=True)
         self.head = nn.Sequential(nn.ReLU(), nn.Dropout(cfg.dropout), nn.Linear(128, 2))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.head(self.backbone(x))
+
+
+def augment(batch: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Random shift + mirror on all channels, brightness/contrast on RGB only (scaling the
+    motion channels would fake motion that never happened). Any frame size."""
+    n, size = len(batch), batch.shape[1]
+    pad = max(2, size // 10)
+    padded = np.pad(batch, ((0, 0), (pad, pad), (pad, pad), (0, 0)), mode="reflect")
+    ys, xs, flips = rng.integers(0, 2 * pad, n), rng.integers(0, 2 * pad, n), rng.random(n) < 0.5
+    out = np.empty_like(batch)
+    for i in range(n):
+        crop = padded[i, ys[i]:ys[i] + size, xs[i]:xs[i] + size]
+        out[i] = crop[:, ::-1] if flips[i] else crop
+    gain, bias = rng.uniform(0.75, 1.3, (n, 1, 1, 1)), rng.uniform(-25, 25, (n, 1, 1, 1))
+    out[..., :3] = np.clip(out[..., :3] * gain + bias, 0, 255).astype(np.uint8)
+    return out
 
 
 def _t(x: np.ndarray) -> torch.Tensor:
@@ -231,7 +228,7 @@ def train(cfg: Cfg, fit: dict, val: dict) -> tuple[nn.Module, dict]:
         t0, loss_sum = time.time(), 0.0
         for _ in range(cfg.steps_per_epoch):
             idx = rng.choice(len(w), cfg.batch, p=w)
-            xb = _t(E._augment(fit["x"][idx], rng)).to(DEVICE)
+            xb = _t(augment(fit["x"][idx], rng)).to(DEVICE)
             loss = F.cross_entropy(model(xb), y_t[idx].to(DEVICE))
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -240,7 +237,7 @@ def train(cfg: Cfg, fit: dict, val: dict) -> tuple[nn.Module, dict]:
             loss_sum += float(loss)
         logits = forward(model, val["x"], latent=False)
         aucs = per_source_clip_auc(logits[:, 1] - logits[:, 0], val)
-        score = float(np.mean([aucs[s] for s in SELECT]))
+        score = float(np.mean([aucs[s] for s in SELECT if s in aucs]))
         hist.append({"epoch": epoch + 1, "loss": loss_sum / cfg.steps_per_epoch, "val_clip_auc": aucs})
         mark = ""
         if score >= best:
@@ -258,7 +255,7 @@ def balanced_threshold(val_scores: np.ndarray, val: dict) -> tuple[float, dict]:
     per = {}
     for src in SELECT:
         m = val["src"] == src
-        if m.any():
+        if m.sum() and len(set(val["y"][m].tolist())) > 1:
             per[src] = C.clip_scores(val_scores[m], val["vid"][m], val["y"][m])
     allsc = np.concatenate([sc for _, sc in per.values()])
     grid = np.quantile(allsc, np.linspace(0, 1, 401))
@@ -292,7 +289,7 @@ def fit_quantum_head(cfg: Cfg, model: nn.Module, fit: dict, val: dict) -> dict:
             for c in T.C_GRID:
                 svc = SVC(kernel="precomputed", C=c, class_weight="balanced").fit(k_fit, y_fit)
                 aucs = per_source_clip_auc(svc.decision_function(k_val), val)
-                score = float(np.mean([aucs[s] for s in SELECT]))
+                score = float(np.mean([aucs[s] for s in SELECT if s in aucs]))
                 if score > best[0]:
                     best = (score, (mode, scale, c, aucs))
     score, (mode, scale, c, aucs) = best
@@ -324,14 +321,14 @@ def run(cfg: Cfg) -> dict:
           + f" | val {len(val['y'])} frames", flush=True)
     model, info = train(cfg, fit, val)
     head = fit_quantum_head(cfg, model, fit, val)
-    hold = load_holdouts(cfg.motion)
+    hold = load_holdouts(cfg.motion, cfg.size)
     results, head_only = {}, {}
     for s, d in hold.items():
         results[s] = C.report(*C.clip_scores(quantum_margins(model, head, d["x"]), d["vid"], d["y"]), head["threshold"])
         logits = forward(model, d["x"], latent=False)
         lab, sc = C.clip_scores(logits[:, 1] - logits[:, 0], d["vid"], d["y"])
         head_only[s] = float(roc_auc_score(lab, sc))
-    mean_acc = float(np.mean([results[s]["accuracy"] for s in ("d3", "d1")]))
+    mean_acc = float(np.mean([results[s]["accuracy"] for s in ("d3", "d1") if s in cfg.sources] or [0.0]))
     row = {"config": dataclasses.asdict(cfg), "holdout": results, "cnn_head_holdout_auc": head_only,
            "mean_d3_d1_acc": mean_acc, "quantum_head": {k: head[k] for k in ("mode", "scale", "C", "threshold",
                                                                              "val_auc", "val_acc")},

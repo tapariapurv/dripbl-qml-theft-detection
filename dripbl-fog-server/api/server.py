@@ -49,7 +49,8 @@ REPORTS = {  # name -> file under reports/ (whitelist: nothing else is readable)
     "shoplifting": "shoplifting_metrics.json",
     "temporal_ab": "temporal_ab_metrics.json",
     "dataset2": "combined_d2_metrics.json",
-    "deployed": "deployed_model.json",          # written by src/deploy_model.py
+    "deployed": "deployed_default.json",        # written by src/deploy_model.py
+    "deployed_retail": "deployed_retail.json",
     "cross_dataset": "xd_experiments.jsonl",    # every cross-dataset experiment
 }
 

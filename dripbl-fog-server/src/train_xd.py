@@ -85,6 +85,8 @@ def main() -> None:
     site_thresholds = {"default": threshold}
     for site, src in (("cctv", "d3"), ("retail", "d1")):  # a node calibrated to its camera domain
         m = pool["src"] == src
+        if not m.any():
+            continue
         site_thresholds[site] = E.pick_threshold(*C.clip_scores(oof[m], pool["vid"][m], pool["y"][m]))[0]
     oof_auc = X.per_source_clip_auc(oof, pool)
     print(f"\n[train_xd] OOF clip AUC {oof_auc}  threshold {threshold:+.4f}  OOF clip acc {oof_acc}", flush=True)
@@ -111,8 +113,8 @@ def main() -> None:
     # score the SAVED artifact through the live node's classifier: what you deploy is what is measured
     fn, thr = C.artifact_margin_fn(out)
     results = C.evaluate(fn, thr)
-    site_results = C.evaluate(fn, thr, thresholds={"dataset3_test": site_thresholds["cctv"],
-                                                   "dataset1_holdout": site_thresholds["retail"]})
+    site_results = C.evaluate(fn, thr, thresholds={"dataset3_test": site_thresholds.get("cctv", thr),
+                                                   "dataset1_holdout": site_thresholds.get("retail", thr)})
     art = joblib.load(out)
     art["metadata"].update({
         "holdout": results, "holdout_site_calibrated": site_results,

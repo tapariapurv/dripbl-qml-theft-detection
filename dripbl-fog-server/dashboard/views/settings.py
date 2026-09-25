@@ -83,11 +83,12 @@ with tabs[0]:
         var = c2.number_input("MOG2 variance threshold", 1.0, 1000.0, float(node["mog2_var_threshold"]),
                               help=dflt(node_def["mog2_var_threshold"]))
         st.markdown("##### Camera site profile")
-        profiles = {"default": "Default (balanced across all training cameras)",
-                    "cctv": "CCTV — wide surveillance scenes", "retail": "Retail — store / counter camera"}
+        profiles = {"default": "Default — general model", "cctv": "CCTV — wide surveillance scenes",
+                    "retail": "Retail — store / counter camera (retail expert model)"}
         prof = st.selectbox("Site profile", list(profiles), format_func=profiles.get,
                             index=list(profiles).index(node["site_profile"]),
-                            help="Uses the decision threshold the model calibrated on footage like yours.")
+                            help="Picks the model and decision threshold trained on footage like yours. "
+                                 "Switching applies live; the active model shows in the sidebar.")
         st.markdown("##### Clip-level judgement")
         st.caption("While there is motion the model scores frames continuously; a trial is judged on the "
                    "mean over the last window, which is how its accuracy was measured.")

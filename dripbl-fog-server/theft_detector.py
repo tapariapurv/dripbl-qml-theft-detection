@@ -46,9 +46,10 @@ class TheftDetector:
         self._settings = settings
         from inference import LiveTheftClassifier   # imported late: heavy, and optional
 
-        path = ROOT / settings.model_path
+        path = self.model_path_for(settings)
         if not path.is_file():
             raise FileNotFoundError(f"no trained artifact at {path}")
+        self.path, self.mtime = path, path.stat().st_mtime
         self._clf = LiveTheftClassifier(path)
         meta = self._clf.metadata
         self._thresholds = {k: float(v) for k, v in meta.get("clip_thresholds", {}).items()}
@@ -59,6 +60,14 @@ class TheftDetector:
         acc = meta.get("clip_test_accuracy", float("nan"))
         self.description = (f"{meta.get('ensemble_size', 1)}-member {meta.get('experiment', 'qsvm')} "
                             f"(clip {acc:.3f}{', motion' if self.motion else ''})")
+
+    @staticmethod
+    def model_path_for(settings: Settings) -> Path:
+        """The expert for this site: the retail model when configured and present, else the default."""
+        retail = ROOT / settings.retail_model_path
+        if settings.site_profile == "retail" and retail.is_file():
+            return retail
+        return ROOT / settings.model_path
 
     @property
     def threshold(self) -> float:

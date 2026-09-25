@@ -71,13 +71,14 @@ class Settings:
     nervous_speed_px_s: float = 250.0   # speed that counts as fully anomalous; camera-scale dependent
     # Clip-level judgement: frames are scored this often while there is motion, and the
     # judge sees the mean margin of the last judge_window_sec (how the model was measured).
-    # Camera domain the node is calibrated to: picks the matching clip threshold from the
-    # model ("cctv" = wide CCTV scenes like UCF-Crime, "retail" = store/counter cameras).
+    # Camera domain of this node. "retail" runs the retail expert model (store/counter cameras);
+    # "cctv" and "default" run the general model; each also picks its calibrated clip threshold.
     site_profile: str = "default"
     score_fps: float = 4.0
     judge_window_sec: float = 2.0
 
-    model_path: str = "models/qsvm_model.joblib"
+    model_path: str = "models/qsvm_model.joblib"          # default / CCTV expert
+    retail_model_path: str = "models/retail_model.joblib"  # retail expert, used when site_profile = "retail"
 
     # "live" = camera_source; "mock" = replay labelled dataset-1 clips (ground truth recorded).
     mode: str = "live"
@@ -152,9 +153,11 @@ def _coerce(key: str, val: object, current: object) -> object:
     return val
 
 
-def apply_changes(base: Settings, patch: dict, *, strict: bool) -> tuple[Settings, list[str]]:
+def apply_changes(base: Settings, patch: dict, *, strict: bool,
+                  fallback: Settings | None = None) -> tuple[Settings, list[str]]:
     """New Settings = base + patch. strict: raise on the first problem (API);
-    otherwise skip bad keys and return their messages (hand-edited file)."""
+    otherwise skip bad keys, keeping `fallback`'s value for them (else base's), and
+    return their messages (hand-edited file)."""
     if not isinstance(patch, dict):
         raise ValueError("settings must be a JSON object")
     values, problems = dataclasses.asdict(base), []
@@ -167,6 +170,8 @@ def apply_changes(base: Settings, patch: dict, *, strict: bool) -> tuple[Setting
             if strict:
                 raise
             problems.append(str(exc))
+            if fallback is not None and key in _FIELDS:
+                values[key] = getattr(fallback, key)
     values["roi"] = tuple(values["roi"])
     return Settings(**values), problems
 
@@ -195,14 +200,16 @@ class ConfigStore:
             self.problems = [str(exc)]
             return Settings()
 
-    def _read(self, base: Settings) -> Settings:
+    def _read(self, previous: Settings) -> Settings:
+        """The file is the whole truth: missing keys take their defaults; only a key with
+        an invalid value keeps its previous value (so a typo never changes behaviour)."""
         self._mtime = os.path.getmtime(self._path)
         try:
             with open(self._path) as fh:
                 raw = json.load(fh)
         except (OSError, json.JSONDecodeError) as exc:
             raise ValueError(f"{os.path.basename(str(self._path))} is not valid JSON ({exc})") from exc
-        settings, self.problems = apply_changes(base, raw, strict=False)
+        settings, self.problems = apply_changes(Settings(), raw, strict=False, fallback=previous)
         return settings
 
     def save(self, settings: Settings) -> None:

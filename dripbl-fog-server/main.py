@@ -117,8 +117,8 @@ def run() -> None:
 
     # Prefer the trained QSVM ensemble; fall back to the prototype classifier so a
     # checkout with no models/qsvm_model.joblib still runs.
+    from theft_detector import TheftDetector
     try:
-        from theft_detector import TheftDetector
         theft = TheftDetector(settings)
         model_desc = theft.description
         print(f"[dripbl-fog] theft model: {model_desc}")
@@ -166,6 +166,21 @@ def run() -> None:
                         if theft is not None:
                             theft._settings = settings
                         print(f"[dripbl-fog] config reloaded: sensitivity={settings.sensitivity}")
+                    # new expert for this site profile, or a newly deployed model file: swap it in live
+                    if theft is not None:
+                        want = TheftDetector.model_path_for(settings)
+                        try:
+                            changed = want != theft.path or want.stat().st_mtime != theft.mtime
+                        except OSError:
+                            changed = False
+                        if changed:
+                            try:
+                                theft = TheftDetector(settings)
+                                model_desc = theft.description
+                                print(f"[dripbl-fog] switched model: {model_desc}")
+                            except Exception as exc:  # noqa: BLE001 - keep the working model
+                                theft.path, theft.mtime = want, want.stat().st_mtime if want.exists() else 0
+                                print(f"[dripbl-fog] could not load {want.name} ({exc}); keeping the current model")
 
                 if source.tick(settings) or grabber.kind != last_kind:
                     # new scene, camera lost or regained: the cut itself is not motion

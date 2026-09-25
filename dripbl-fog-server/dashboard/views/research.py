@@ -41,9 +41,32 @@ def rates(cm: dict) -> dict[str, float | None]:
     }
 
 
-tab_model, tab_mock, tab_hw, tab_exp = st.tabs(
-    [":material/verified: Deployed model", ":material/play_circle: Mock-mode scoreboard",
+tab_model, tab_xd, tab_mock, tab_hw, tab_exp = st.tabs(
+    [":material/verified: Deployed model", ":material/public: Cross-dataset", ":material/play_circle: Mock-mode scoreboard",
      ":material/memory: Hardware feasibility", ":material/lab_panel: Experiment log"])
+
+NAMES = {"dataset3_test": "UCF-Crime Test (CCTV)", "dataset1_holdout": "Retail hold-out (dataset-1)",
+         "dataset2_holdout": "Second store camera (dataset-2)"}
+
+with tab_xd:
+    st.markdown("Each camera domain runs its own expert, chosen by the node's **site profile**. Every number "
+                "below is measured once on videos no model or threshold ever saw.")
+    experts = [(slot, report(f"deployed{'' if slot == 'default' else '_' + slot}")) for slot in ("default", "retail")]
+    experts = [(slot, e) for slot, e in experts if e]
+    if not experts:
+        st.info("No cross-dataset expert deployed yet (src/train_xd.py, then src/deploy_model.py).")
+    for slot, e in experts:
+        st.markdown(f"##### {'Retail expert' if slot == 'retail' else 'Default / CCTV model'} · `{e.get('experiment')}`")
+        res = e.get("holdout_site_calibrated") or e.get("holdout") or {}
+        cols = st.columns(len(res) or 1)
+        for col, (name, r) in zip(cols, res.items()):
+            col.metric(NAMES.get(name, name), f"{r['accuracy']:.1%}",
+                       help=f"AUC {r['auc']:.3f} · recall {r['recall']:.1%} · {r['clips']} clips · fp {r['fp']} fn {r['fn']}")
+        oof = (e.get("training") or {}).get("oof_clip_auc")
+        if oof:
+            st.caption("Out-of-fold clip AUC on training videos: " + ", ".join(f"{k} {v:.3f}" for k, v in oof.items()))
+    st.caption("Before this work the single deployed model scored 87.1% on UCF-Crime but 47.2% on retail "
+               "(recall 0) and 50% on the second store camera.")
 
 with tab_model:
     m = report("metrics")

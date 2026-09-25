@@ -65,6 +65,20 @@ def heartbeat_after(t: float, timeout: float = 30.0) -> dict:
     raise AssertionError(f"no heartbeat within {timeout}s")
 
 
+def log_count(text: str) -> int:
+    return (tmp / "node.out").read_text().count(text)
+
+
+def wait_log(text: str, more_than: int, timeout: float = 20.0) -> bool:
+    """Loading a model takes a moment: poll the node's log instead of sampling once."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if log_count(text) > more_than:
+            return True
+        time.sleep(0.3)
+    return False
+
+
 def step(name: str, proc: subprocess.Popen, action) -> dict:
     t = time.time()
     action()
@@ -115,6 +129,24 @@ def main() -> None:
         step("mock mode with missing clip folder", proc,
              lambda: write_cfg({**BASE, "mode": "mock", "mock_dir": str(tmp / "nope")}))
         step("back to the real video", proc, lambda: write_cfg(BASE))
+        hb = step("site profile -> retail with no retail model (falls back)", proc,
+                  lambda: write_cfg({**BASE, "site_profile": "retail", "retail_model_path": str(tmp / "none.joblib")}))
+        n_switch = log_count("switched model")
+        shutil.copy2(ROOT / "models" / "qsvm_model.joblib", tmp / "retail.joblib")
+        step("site profile -> retail with a retail model (live switch)", proc,
+             lambda: write_cfg({**BASE, "site_profile": "retail", "retail_model_path": str(tmp / "retail.joblib")}))
+        assert wait_log("switched model", n_switch), "model did not switch live"
+        step("back to default profile", proc, lambda: write_cfg(BASE))
+        wait_log("switched model", n_switch + 1, timeout=10)
+        n_switch = log_count("switched model")
+        step("a new model deployed while running (hot swap)", proc,
+             lambda: write_cfg({**BASE, "model_path": str(tmp / "retail.joblib")}))
+        assert wait_log("switched model", n_switch), "deployed model not hot-swapped"
+        (tmp / "broken.joblib").write_bytes(b"not a model")
+        step("a corrupt model file deployed (keeps the working model)", proc,
+             lambda: write_cfg({**BASE, "model_path": str(tmp / "broken.joblib")}))
+        assert wait_log("keeping the current model", 0), "corrupt model not rejected"
+        step("back to the real model", proc, lambda: write_cfg(BASE))
         step("whole data directory deleted", proc, lambda: shutil.rmtree(data))
         n = store.stats(db, 0)["n"]
         time.sleep(4)

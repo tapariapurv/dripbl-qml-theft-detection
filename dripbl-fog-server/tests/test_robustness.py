@@ -139,7 +139,9 @@ def test_config() -> None:
     assert c.reload_if_changed() is None and c.settings == good and "JSON" in c.problems[0]
     path.write_text(json.dumps({"sensitivity": 0.9}))
     os.utime(path, (time.time() + 10, time.time() + 10))
-    assert c.reload_if_changed().sensitivity == 0.9 and not c.problems
+    reloaded = c.reload_if_changed()
+    assert reloaded.sensitivity == 0.9 and not c.problems
+    assert reloaded.debounce_sec == Settings().debounce_sec, "a key removed from the file must revert to default"
     # strict mode (API): every bad input rejected, including NaN, bools-as-numbers and floats-as-ints
     for bad in ({"sensitivity": float("nan")}, {"sensitivity": True}, {"mog2_history": 3.5},
                 {"roi": [0, 0, 0, 10]}, {"roi": [-1, 0, 10, 10]}, {"camera_source": None},

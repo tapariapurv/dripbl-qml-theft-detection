@@ -41,8 +41,8 @@ D2_HOLDOUT = ("not_shoplifting4", "shoplifting4")
 SEED = 42
 
 
-def _small(frame_bgr: np.ndarray) -> np.ndarray:
-    return cv2.cvtColor(cv2.resize(frame_bgr, (SIZE, SIZE), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
+def _small(frame_bgr: np.ndarray, size: int = SIZE) -> np.ndarray:
+    return cv2.cvtColor(cv2.resize(frame_bgr, (size, size), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
 
 
 def motion_image(cur_rgb: np.ndarray, prev_rgb: np.ndarray) -> np.ndarray:
@@ -50,8 +50,8 @@ def motion_image(cur_rgb: np.ndarray, prev_rgb: np.ndarray) -> np.ndarray:
     return np.clip((cur_rgb.astype(np.int16) - prev_rgb.astype(np.int16)) // 2 + 128, 0, 255).astype(np.uint8)
 
 
-def extract_video(path: Path, max_frames: int = D1_MAX) -> tuple[np.ndarray, np.ndarray]:
-    """One video -> (rgb, motion) uint8 arrays of 64x64 frames spread over the whole clip."""
+def extract_video(path: Path, max_frames: int = D1_MAX, size: int = SIZE) -> tuple[np.ndarray, np.ndarray]:
+    """One video -> (rgb, motion) uint8 arrays of size x size frames spread over the whole clip."""
     cap = cv2.VideoCapture(str(path))
     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     stride = max(D1_STRIDE, (n - MOTION_GAP) // max_frames)
@@ -60,24 +60,24 @@ def extract_video(path: Path, max_frames: int = D1_MAX) -> tuple[np.ndarray, np.
         ok, frame = cap.read()
         if not ok:
             break
-        buf.append(_small(frame))
+        buf.append(_small(frame, size))
         buf = buf[-(MOTION_GAP + 1):]
         if idx >= MOTION_GAP and (idx - MOTION_GAP) % stride == 0:
             rgb.append(buf[-1])
             mot.append(motion_image(buf[-1], buf[0]))
         idx += 1
     cap.release()
-    return np.array(rgb, np.uint8).reshape(-1, SIZE, SIZE, 3), np.array(mot, np.uint8).reshape(-1, SIZE, SIZE, 3)
+    return np.array(rgb, np.uint8).reshape(-1, size, size, 3), np.array(mot, np.uint8).reshape(-1, size, size, 3)
 
 
-def _extract_folder(pairs: list[tuple[Path, int, str]], cache: Path) -> dict[str, np.ndarray]:
+def _extract_folder(pairs: list[tuple[Path, int, str]], cache: Path, size: int = SIZE) -> dict[str, np.ndarray]:
     if cache.exists():
         z = np.load(cache)
         return {k: z[k] for k in z.files}
     t0 = time.time()
     rgb, mot, ys, vids = [], [], [], []
     for path, label, vid in pairs:
-        r, m = extract_video(path)
+        r, m = extract_video(path, size=size)
         rgb.append(r)
         mot.append(m)
         ys += [label] * len(r)
@@ -89,10 +89,11 @@ def _extract_folder(pairs: list[tuple[Path, int, str]], cache: Path) -> dict[str
     return out
 
 
-def load_dataset1() -> dict[str, np.ndarray]:
-    """All dataset-1 videos -> rgb (N,64,64,3), motion (N,64,64,3), y, vid. Cached."""
+def load_dataset1(size: int = SIZE) -> dict[str, np.ndarray]:
+    """All dataset-1 videos -> rgb (N,s,s,3), motion (N,s,s,3), y, vid. Cached per size."""
+    cache = D1_CACHE if size == SIZE else D1_CACHE.with_name(f"dataset1_{size}.npz")
     return _extract_folder([(p, label, f"d1:{p.stem}") for folder, label in (("normal", 0), ("shoplifting", 1))
-                            for p in sorted((DATA / "dataset-1" / folder).glob("*.mp4"))], D1_CACHE)
+                            for p in sorted((DATA / "dataset-1" / folder).glob("*.mp4"))], cache, size)
 
 
 def dataset1_split() -> dict[str, list[str]]:
@@ -111,21 +112,21 @@ def dataset1_split() -> dict[str, list[str]]:
     return split
 
 
-def dataset1_part(part: str) -> dict[str, np.ndarray]:
-    d = load_dataset1()
+def dataset1_part(part: str, size: int = SIZE) -> dict[str, np.ndarray]:
+    d = load_dataset1(size)
     keep = np.isin(d["vid"], dataset1_split()[part])
     return {k: v[keep] for k, v in d.items()}
 
 
-def load_dataset2() -> dict[str, np.ndarray]:
+def load_dataset2(size: int = SIZE) -> dict[str, np.ndarray]:
     """dataset-2 decoded from its source videos, same extractor as dataset-1."""
     return _extract_folder([(p, 0 if p.stem.startswith("not_") else 1, f"d2:{p.stem}")
                             for p in sorted((DATA / "dataset-2" / "videos").glob("*.mp4"))],
-                           ROOT / "reports" / "dataset2_64.npz")
+                           ROOT / "reports" / f"dataset2_{size}.npz", size)
 
 
-def dataset2_part(part: str) -> dict[str, np.ndarray]:
-    d = load_dataset2()
+def dataset2_part(part: str, size: int = SIZE) -> dict[str, np.ndarray]:
+    d = load_dataset2(size)
     hold = np.isin(d["vid"], [f"d2:{v}" for v in D2_HOLDOUT])
     keep = hold if part == "holdout" else ~hold
     return {k: v[keep] for k, v in d.items()}
