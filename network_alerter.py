@@ -77,7 +77,8 @@ class NetworkAlerter:
 
     def dispatch_alert(self, payload: dict[str, Any]) -> None:
         """Only flagged trials are pushed to the human-facing endpoint + hardware."""
-        self._pool.submit(self._post, payload)
+        if self._settings.alert_endpoint:  # blank = no external POST (the API reads the DB instead)
+            self._pool.submit(self._post, payload)
         self.trigger_alert(True)
 
     def _post(self, payload: dict[str, Any]) -> None:

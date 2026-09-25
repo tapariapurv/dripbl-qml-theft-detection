@@ -64,13 +64,16 @@ class LiveTheftClassifier:
         member = self._members[0]
         return member["projector"].transform(embed_batch(batch, member["cnn"]))
 
-    def _member_margins(self, batch: np.ndarray, member: dict) -> tuple[np.ndarray, np.ndarray]:
-        angles = member["projector"].transform(embed_batch(batch, member["cnn"]))
+    def _member_margins(self, batch: np.ndarray, member: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        latents = embed_batch(batch, member["cnn"])
+        angles = member["projector"].transform(latents)
         K = np.zeros((len(angles), member["n_train"]), dtype=np.float64)
         K[:, member["clf"].support_] = kernel_matrix(encode(angles), member["states"])
-        return member["clf"].decision_function(K), angles
+        return member["clf"].decision_function(K), angles, latents
 
-    def predict_batch(self, frames_bgr: list[np.ndarray] | np.ndarray) -> list[dict]:
+    def predict_batch(self, frames_bgr: list[np.ndarray] | np.ndarray, detail: bool = False) -> list[dict]:
+        """`detail=True` adds per-member margins and the 128-d latent (live node only;
+        skipped for batch evaluation, where 20k latents as lists would waste memory)."""
         if self.clip_only:
             raise RuntimeError(
                 "this artifact is a clip-descriptor model (metadata.clip_qsvm=True): it scores a "
@@ -78,10 +81,11 @@ class LiveTheftClassifier:
             )
         batch = np.concatenate([self._preprocess(f) for f in frames_bgr])
         per_member = [self._member_margins(batch, m) for m in self._members]
-        margins = np.mean([m for m, _ in per_member], axis=0)  # ensemble = mean margin
-        angles = per_member[0][1]
+        member_margins = np.array([m for m, _, _ in per_member])  # (members, N)
+        margins = member_margins.mean(axis=0)  # ensemble = mean margin
+        angles, latents = per_member[0][1], per_member[0][2]
         preds = (margins > 0).astype(int)
-        return [
+        out = [
             {
                 "prediction": _LABELS[int(p)],
                 "confidence": float(1.0 / (1.0 + np.exp(-abs(m)))),
@@ -90,6 +94,11 @@ class LiveTheftClassifier:
             }
             for p, m, a in zip(preds, margins, angles)
         ]
+        if detail:
+            for i, r in enumerate(out):
+                r["member_margins"] = member_margins[:, i].tolist()
+                r["latent"] = latents[i].tolist()  # first member's 128-d CNN latent
+        return out
 
     def predict_clip(self, frames_bgr: list[np.ndarray]) -> dict:
         """One verdict for a sequence of frames from the same scene — how the live
@@ -130,6 +139,6 @@ class LiveTheftClassifier:
 
     def predict_frame(self, frame_bgr: np.ndarray) -> dict:
         t0 = time.perf_counter()
-        result = self.predict_batch([frame_bgr])[0]
+        result = self.predict_batch([frame_bgr], detail=True)[0]
         result["latency_ms"] = (time.perf_counter() - t0) * 1e3
         return result

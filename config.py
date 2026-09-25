@@ -10,7 +10,10 @@ import json
 import os
 import time
 from dataclasses import dataclass, field, fields
+from pathlib import Path
 from typing import Tuple
+
+ROOT = Path(__file__).resolve().parent
 
 
 @dataclass(slots=True)
@@ -21,6 +24,7 @@ class Settings:
     loop_file: bool = True         # replay local video files when they end
     frame_width: int = 640
     frame_height: int = 480
+
 
     roi: Tuple[int, int, int, int] = (140, 60, 360, 360)
 
@@ -45,7 +49,7 @@ class Settings:
     use_qiskit: bool = True        # use real ZZFeatureMap+Aer kernel if qiskit installed
 
     # Human-facing alert dispatch (only called when the AI judge flags a trial)
-    alert_endpoint: str = "http://localhost:8000/api/alerts"
+    alert_endpoint: str = ""   # optional extra POST per flagged trial; the API reads the DB directly
     request_timeout_sec: float = 2.0
     thumbnail_jpeg_quality: int = 60
     send_thumbnail: bool = False
@@ -54,6 +58,30 @@ class Settings:
     led_pin: int = 27
 
     log_path: str = "trials.log"
+
+    # AI judge weights. Trained model: a measured detector dominates, gait modifies.
+    w_crime: float = 0.80
+    w_nervous: float = 0.13
+    w_speed: float = 0.07
+    # Prototype-fallback weights: gait gets a near-equal vote when no trained model.
+    fb_w_crime: float = 0.50
+    fb_w_nervous: float = 0.25
+    fb_w_speed: float = 0.15
+    fb_w_person_bonus: float = 0.10
+    nervous_speed_px_s: float = 250.0   # speed that counts as fully anomalous; camera-scale dependent
+
+    model_path: str = "models/qsvm_model.joblib"
+
+    # "live" = camera_source; "mock" = replay labelled dataset-1 clips (ground truth recorded).
+    mode: str = "live"
+    mock_dir: str = "../training-data/dataset-1"
+    mock_clip_sec: float = 20.0
+
+    # Command center: the node publishes to data_dir (SQLite + live frame + snapshots).
+    data_dir: str = "data"
+    live_frame_fps: float = 10.0
+    live_jpeg_quality: int = 70
+    heartbeat_sec: float = 1.0
 
     @property
     def area_threshold(self) -> float:
@@ -70,7 +98,7 @@ class ConfigStore:
     """Loads Settings from JSON, creating the file with defaults if absent, and
     detects external edits by mtime so the running system can hot-reload them."""
 
-    def __init__(self, path: str = "runtime_config.json") -> None:
+    def __init__(self, path: str | Path = ROOT / "runtime_config.json") -> None:
         self._path = path
         self._mtime = 0.0
         self.settings = self._load_or_init()
@@ -93,8 +121,11 @@ class ConfigStore:
         return Settings(**raw)
 
     def save(self, settings: Settings) -> None:
-        with open(self._path, "w") as fh:
+        # temp + os.replace: another process (node <-> API) never reads a half-written file
+        tmp = f"{self._path}.tmp"
+        with open(tmp, "w") as fh:
             json.dump(dataclasses.asdict(settings), fh, indent=2)
+        os.replace(tmp, self._path)
         self._mtime = os.path.getmtime(self._path)
         self.settings = settings
 

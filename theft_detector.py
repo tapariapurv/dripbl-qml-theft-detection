@@ -31,7 +31,7 @@ class TheftDetector:
         self._settings = settings
         from inference import LiveTheftClassifier   # imported late: heavy, and optional
 
-        path = Path(getattr(settings, "model_path", ROOT / "models" / "qsvm_model.joblib"))
+        path = ROOT / settings.model_path
         if not path.is_file():
             raise FileNotFoundError(f"no trained artifact at {path}")
         self._clf = LiveTheftClassifier(path)
@@ -53,6 +53,9 @@ class TheftDetector:
             },
             "margin": float(r.get("margin", 0.0)),
             "features": list(r["features_4d"]),   # the 4 ZZFeatureMap angles
+            "member_margins": r["member_margins"],
+            "latent": r["latent"],
+            "latency_ms": r["latency_ms"],
             "backend": "trained_qsvm",
         }
 
