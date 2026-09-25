@@ -61,7 +61,7 @@ def arrow() -> None:
 # 1 + 2: frame and motion gate ---------------------------------------------------------------
 a, b = st.columns([1.2, 1], gap="large")
 with a:
-    stage_card(1, "Camera frame", f"Source <b>{stage.get('source') or t.get('source') or '—'}</b> · "
+    stage_card(1, "Camera frame", f"Source <b>{lib.esc(stage.get('source') or t.get('source') or '—')}</b> · "
                                   f"mode {stage.get('mode', '—')} · {lib.fmt_time(t['ts'], date=True)}")
     if t.get("snapshot"):
         st.image(lib.media_url(f"/api/trials/{t['id']}/snapshot.jpg"), width="stretch")
@@ -138,7 +138,12 @@ with a:
 with b:
     crime = v.get("signals", {}).get("crime_signal", q.get("class_scores", {}).get("suspicious_signature", 0))
     st.metric("Classifier output", (q.get("object_class") or "—").upper())
-    st.metric("Crime signal", lib.score(crime), help="Anomaly probability from the ensemble margin (0–1)")
+    st.metric("Crime signal", lib.score(crime), help="Calibrated from the windowed mean margin: 0.625 = the "
+                                                     "model's validated clip threshold")
+    w = q.get("window")
+    if w:
+        st.caption(f"Clip window: mean margin {w['mean_margin']:+.3f} over {w['frames']} frames / "
+                   f"{w['seconds']:g} s vs threshold {w['clip_threshold']:+.3f}")
     st.caption(f"Backend: {q.get('backend', '—')} · model: {stage.get('model', '—')} · "
                f"{stage.get('latency_ms', 0):.1f} ms for stages 4–7")
 

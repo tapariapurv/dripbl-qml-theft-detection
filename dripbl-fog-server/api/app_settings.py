@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +38,7 @@ DEFAULTS: dict[str, Any] = {
         "date_format": "%d %b %Y",
         "show_video": True,
         "video_max_width_px": 900,
-        "tiles": ["node", "mode", "fps", "latency", "trials", "flagged", "pending"],
+        "tiles": ["node", "camera", "mode", "fps", "latency", "trials", "flagged", "pending"],
         "show_ground_truth": True,     # mock mode: show the true label next to verdicts
         "show_thresholds": True,       # draw the flag threshold on charts
         "suspicion_decimals": 2,
@@ -79,6 +81,22 @@ DEFAULTS: dict[str, Any] = {
     },
 }
 
+# Bounds for numeric settings (dotted path): out-of-range values would break the dashboard
+# (a negative refresh interval, an inbox of -1 alerts) so they are rejected up front.
+RANGES: dict[str, tuple[float, float]] = {
+    "dashboard.refresh_sec": (0.5, 60), "dashboard.timeline_minutes": (1, 1440), "dashboard.inbox_size": (1, 50),
+    "dashboard.table_page_size": (10, 1000), "dashboard.video_max_width_px": (200, 4000),
+    "dashboard.suspicion_decimals": (0, 6), "dashboard.chart_height_px": (150, 1200),
+    "notifications.min_suspicion": (0, 1), "notifications.cooldown_sec": (0, 86400),
+    "notifications.email.smtp_port": (1, 65535),
+    "quantum.default_trials": (2, 12), "quantum.default_shots": (16, 100000), "retention.days": (0, 36500),
+}
+CHOICES: dict[str, tuple[str, ...]] = {
+    "ai_judge.mode": ("rules", "rules+claude"), "ai_judge.effort": ("low", "medium", "high"),
+    "notifications.webhook.format": ("json", "slack", "discord"),
+    "notifications.ntfy.priority": ("min", "low", "default", "high", "urgent"),
+}
+
 SECRETS = (("notifications", "email", "password"), ("ai_judge", "api_key"), ("quantum", "ibm_token"))
 
 
@@ -99,16 +117,25 @@ def _merge(base: dict, over: dict, path: str = "") -> dict:
                 raise ValueError(f"{where} must be true/false")
             out[key] = val
         elif isinstance(ref, (int, float)):
-            if isinstance(val, bool) or not isinstance(val, (int, float)):
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val):
                 raise ValueError(f"{where} must be a number")
-            out[key] = type(ref)(val) if isinstance(ref, float) else val
+            if isinstance(ref, int) and not float(val).is_integer():
+                raise ValueError(f"{where} must be a whole number")
+            lo, hi = RANGES.get(where, (-1e9, 1e9))
+            if not lo <= val <= hi:
+                raise ValueError(f"{where} must be between {lo:g} and {hi:g}")
+            out[key] = float(val) if isinstance(ref, float) else int(val)
         elif isinstance(ref, list):
-            if not isinstance(val, list):
-                raise ValueError(f"{where} must be a list")
+            if not isinstance(val, list) or not all(isinstance(v, str) for v in val) or len(val) > 100:
+                raise ValueError(f"{where} must be a list of strings")
             out[key] = val
         else:
-            if not isinstance(val, str):
-                raise ValueError(f"{where} must be a string")
+            if not isinstance(val, str) or len(val) > 5000:
+                raise ValueError(f"{where} must be a string (max 5000 characters)")
+            if key.endswith("_color") and not re.fullmatch(r"#[0-9a-fA-F]{6}", val):
+                raise ValueError(f"{where} must be a hex colour like #7C5CFF")
+            if where in CHOICES and val not in CHOICES[where]:
+                raise ValueError(f"{where} must be one of {'|'.join(CHOICES[where])}")
             out[key] = val
     return out
 

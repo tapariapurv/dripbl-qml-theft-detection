@@ -82,6 +82,20 @@ with tabs[0]:
                                help=dflt(node_def["mog2_history"]))
         var = c2.number_input("MOG2 variance threshold", 1.0, 1000.0, float(node["mog2_var_threshold"]),
                               help=dflt(node_def["mog2_var_threshold"]))
+        st.markdown("##### Camera site profile")
+        profiles = {"default": "Default (balanced across all training cameras)",
+                    "cctv": "CCTV — wide surveillance scenes", "retail": "Retail — store / counter camera"}
+        prof = st.selectbox("Site profile", list(profiles), format_func=profiles.get,
+                            index=list(profiles).index(node["site_profile"]),
+                            help="Uses the decision threshold the model calibrated on footage like yours.")
+        st.markdown("##### Clip-level judgement")
+        st.caption("While there is motion the model scores frames continuously; a trial is judged on the "
+                   "mean over the last window, which is how its accuracy was measured.")
+        c1, c2 = st.columns(2)
+        sfps = c1.number_input("Scoring rate (frames/s)", 0.5, 30.0, float(node["score_fps"]), 0.5,
+                               help=dflt(node_def["score_fps"]) + ". Lower it on a slow Pi.")
+        jwin = c2.number_input("Judgement window (s)", 0.25, 30.0, float(node["judge_window_sec"]), 0.25,
+                               help=dflt(node_def["judge_window_sec"]))
         st.markdown("##### AI judge weights · trained model")
         st.caption("suspicion = w_crime·crime + w_nervous·jitter + w_speed·speed_anomaly")
         w1, w2, w3 = st.columns(3)
@@ -99,7 +113,7 @@ with tabs[0]:
         nsp = st.number_input("Speed counted as fully anomalous (px/s)", 1.0, 1e5, float(node["nervous_speed_px_s"]),
                               10.0, help=dflt(node_def["nervous_speed_px_s"]) + ". Depends on camera distance.")
         if st.form_submit_button("Save detection settings", type="primary"):
-            save_node({"sensitivity": sens, "debounce_sec": debounce, "min_contour_area": area, "mog2_history": hist,
+            save_node({"site_profile": prof, "score_fps": sfps, "judge_window_sec": jwin, "sensitivity": sens, "debounce_sec": debounce, "min_contour_area": area, "mog2_history": hist,
                        "mog2_var_threshold": var, "w_crime": wc, "w_nervous": wn, "w_speed": ws, "fb_w_crime": fwc,
                        "fb_w_nervous": fwn, "fb_w_speed": fws, "fb_w_person_bonus": fwb, "nervous_speed_px_s": nsp})
     with right:
@@ -228,7 +242,7 @@ with tabs[3]:
 # --- Dashboard -------------------------------------------------------------------------------------
 with tabs[4]:
     dsh, dd = app["dashboard"], app_def["dashboard"]
-    TILES = {"node": "Node status", "mode": "Mode", "fps": "Throughput", "latency": "Inference time",
+    TILES = {"node": "Node status", "camera": "Camera", "mode": "Mode", "fps": "Throughput", "latency": "Inference time",
              "trials": "Trials today", "flagged": "Flagged today", "pending": "Awaiting review",
              "threshold": "Flag threshold", "gait": "Live gait"}
     PAGES = ["Command Center", "Alerts", "Pipeline Inspector", "Research", "Quantum Lab"]

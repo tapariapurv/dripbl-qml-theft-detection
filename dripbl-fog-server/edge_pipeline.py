@@ -55,8 +55,11 @@ class MotionDetector:
         )
 
     def crop_roi(self, frame: np.ndarray) -> np.ndarray:
+        """ROI clamped to the frame; the whole frame if the ROI misses it (e.g. a camera
+        smaller than the configured ROI), so a bad ROI degrades instead of crashing."""
         x, y, w, h = self._roi
-        return frame[y:y + h, x:x + w]
+        crop = frame[y:y + h, x:x + w]
+        return crop if crop.shape[0] >= 8 and crop.shape[1] >= 8 else frame
 
     def detect(self, roi_frame: np.ndarray) -> tuple[bool, tuple[float, float] | None]:
         mask = self._bg.apply(roi_frame)

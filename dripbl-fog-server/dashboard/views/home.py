@@ -29,6 +29,12 @@ def tiles() -> None:
     all_tiles = {
         "node": lib.tile("Fog node", "ONLINE" if online else "OFFLINE",
                          lib.ago(node.get("ts")) if node else "no heartbeat yet", "ok" if online else "alert"),
+        "camera": lib.tile("Camera", {"offline": "NO SIGNAL", "connecting": "CONNECTING"}.get(
+                               node.get("source_kind"), "LIVE") if online else "—",
+                           {"offline": "reconnecting automatically", "connecting": "opening source"}.get(
+                               node.get("source_kind"), node.get("source_kind") or ""),
+                           {"offline": "alert", "connecting": "warn"}.get(node.get("source_kind"), "ok")
+                           if online else ""),
         "mode": lib.tile("Mode", (node.get("mode") or "—").upper(),
                          (node.get("source") or "")[:28] or "—"),
         "fps": lib.tile("Throughput", f"{node.get('fps', 0):.0f} fps" if online else "—", "frames processed"),

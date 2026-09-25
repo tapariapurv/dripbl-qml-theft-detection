@@ -58,6 +58,14 @@ with TestClient(app) as client:
     assert client.put("/api/config", json={"sensitivity": 3}, headers=KEY).status_code == 422
     assert client.put("/api/config", json={"no_such": 1}, headers=KEY).status_code == 422
 
+    # camera passwords are masked on read and survive a round trip of the masked value
+    client.put("/api/config", json={"camera_source": "rtsp://admin:hunter2@10.0.0.5/s1"}, headers=KEY)
+    shown = client.get("/api/config").json()["camera_source"]
+    assert shown == "rtsp://admin:********@10.0.0.5/s1", shown
+    client.put("/api/config", json={"camera_source": shown, "sensitivity": 0.6}, headers=KEY)
+    import config as _c
+    assert _c.ConfigStore().settings.camera_source == "rtsp://admin:hunter2@10.0.0.5/s1"
+
     # app settings: nested partial update, secrets masked on read
     s = client.put("/api/app-settings", json={"dashboard": {"refresh_sec": 5},
                                               "ai_judge": {"api_key": "sk-secret"}}, headers=KEY).json()

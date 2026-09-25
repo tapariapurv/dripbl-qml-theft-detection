@@ -53,6 +53,11 @@ with st.sidebar:
         node = status["node"]
         st.html(lib.pill("Node live", "ok", live=True) + " " +
                 lib.pill("Mock" if node["mode"] == "mock" else "Live feed", "accent"))
+        if node.get("source_kind") in ("offline", "connecting"):
+            st.html(lib.pill("Camera offline" if node["source_kind"] == "offline" else "Camera connecting", "alert"))
+        if node.get("config_problems"):
+            st.html(lib.pill("Config problem", "warn"))
+            st.caption("; ".join(node["config_problems"]))
         st.caption(f"{node['model']}  \n{node['fps']:.0f} fps · {node['last_infer_ms']:.0f} ms/frame")
     else:
         st.html(lib.pill("Node offline", "warn"))

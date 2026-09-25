@@ -18,6 +18,7 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -37,7 +38,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import store  # noqa: E402
 from api import app_settings, quantum_check  # noqa: E402
 from api.worker import Worker, send_notifications  # noqa: E402
-from config import ConfigStore, Settings  # noqa: E402
+from config import ConfigStore, Settings, apply_changes  # noqa: E402
 
 CONFIG_PATH = Path(os.environ.get("DRIPBL_CONFIG", ROOT / "runtime_config.json"))
 NODE_OFFLINE_AFTER_SEC = 5.0
@@ -48,6 +49,8 @@ REPORTS = {  # name -> file under reports/ (whitelist: nothing else is readable)
     "shoplifting": "shoplifting_metrics.json",
     "temporal_ab": "temporal_ab_metrics.json",
     "dataset2": "combined_d2_metrics.json",
+    "deployed": "deployed_model.json",          # written by src/deploy_model.py
+    "cross_dataset": "xd_experiments.jsonl",    # every cross-dataset experiment
 }
 
 
@@ -233,8 +236,17 @@ def stream(fps: float = Query(10.0, gt=0, le=30)):
 
 # --- configuration --------------------------------------------------------------
 
+_URL_PASSWORD = re.compile(r"^(\w+://[^/@:]*:)([^/@]*)(@)")
+
+
+def _mask_camera(src: Any) -> Any:
+    """rtsp://user:secret@host -> rtsp://user:********@host (never echo camera passwords)."""
+    return _URL_PASSWORD.sub(lambda m: m.group(1) + app_settings.MASK + m.group(3), src) if isinstance(src, str) else src
+
+
 def _config_dict(s: Settings) -> dict[str, Any]:
     d = dataclasses.asdict(s)
+    d["camera_source"] = _mask_camera(d["camera_source"])
     d["roi"] = list(d["roi"])
     d["derived"] = {"flag_threshold": s.flag_threshold, "area_threshold": s.area_threshold}
     return d
@@ -251,53 +263,19 @@ def config_defaults() -> dict[str, Any]:
     return _config_dict(Settings())
 
 
-_CONFIG_RULES: dict[str, tuple[float, float]] = {
-    "sensitivity": (0.0, 1.0), "debounce_sec": (0.0, 3600.0), "min_contour_area": (1.0, 1e6),
-    "mog2_history": (1, 10000), "mog2_var_threshold": (1.0, 1000.0), "live_frame_fps": (0.0, 30.0),
-    "live_jpeg_quality": (10, 100), "mock_clip_sec": (1.0, 3600.0), "nervous_speed_px_s": (1.0, 1e5),
-    "heartbeat_sec": (0.2, 60.0), "thumbnail_jpeg_quality": (10, 100), "request_timeout_sec": (0.1, 60.0),
-    **{w: (0.0, 1.0) for w in ("w_crime", "w_nervous", "w_speed", "fb_w_crime", "fb_w_nervous",
-                               "fb_w_speed", "fb_w_person_bonus")},
-}
-
-
 @app.put("/api/config", tags=["config"], dependencies=write)
 def put_config(patch: dict[str, Any]) -> dict[str, Any]:
     """Partial update of node settings; the running node applies it within ~1 s."""
     cfg = ConfigStore(CONFIG_PATH)
-    current = dataclasses.asdict(cfg.settings)
-    valid = {f.name: f for f in dataclasses.fields(Settings)}
-    for key, val in patch.items():
-        if key not in valid:
-            raise HTTPException(422, f"unknown setting: {key}")
-        ref = current[key]
-        if key == "camera_source":
-            if not isinstance(val, (int, str)) or isinstance(val, bool):
-                raise HTTPException(422, "camera_source must be a camera index or a URL/path string")
-        elif key == "roi":
-            if not (isinstance(val, list) and len(val) == 4 and all(isinstance(v, int) and v >= 0 for v in val)
-                    and val[2] > 0 and val[3] > 0):
-                raise HTTPException(422, "roi must be [x, y, width, height] non-negative integers")
-            val = tuple(val)
-        elif key == "mode" and val not in ("live", "mock"):
-            raise HTTPException(422, "mode must be 'live' or 'mock'")
-        elif key == "source_kind" and val not in ("auto", "camera", "stream", "file"):
-            raise HTTPException(422, "source_kind must be auto|camera|stream|file")
-        elif isinstance(ref, bool):
-            if not isinstance(val, bool):
-                raise HTTPException(422, f"{key} must be true/false")
-        elif isinstance(ref, (int, float)):
-            if isinstance(val, bool) or not isinstance(val, (int, float)):
-                raise HTTPException(422, f"{key} must be a number")
-            lo, hi = _CONFIG_RULES.get(key, (-1e12, 1e12))
-            if not lo <= val <= hi:
-                raise HTTPException(422, f"{key} must be between {lo} and {hi}")
-            val = type(ref)(val)
-        elif isinstance(ref, str) and not isinstance(val, str):
-            raise HTTPException(422, f"{key} must be a string")
-        current[key] = val
-    current["roi"] = tuple(current["roi"])
-    new = Settings(**current)
+    src = patch.get("camera_source") if isinstance(patch, dict) else None
+    if isinstance(src, str) and f":{app_settings.MASK}@" in src:  # masked password sent back: keep the stored one
+        old = _URL_PASSWORD.match(str(cfg.settings.camera_source))
+        if old:
+            patch = {**patch, "camera_source": src.replace(app_settings.MASK, old.group(2), 1)}
+    try:
+        new, _ = apply_changes(cfg.settings, patch, strict=True)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     cfg.save(new)
     return _config_dict(new)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import logging.handlers
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -42,7 +43,11 @@ class NetworkAlerter:
         self._logger = logging.getLogger("dripbl.fog")
         self._logger.setLevel(logging.INFO)
         self._logger.propagate = False  # keep console clean; file handler below is sole sink
-        handler = logging.FileHandler(settings.log_path)
+        for old in list(self._logger.handlers):  # a re-created alerter must not double-log
+            self._logger.removeHandler(old)
+            old.close()
+        # rotating: the audit log would otherwise grow ~100 MB/day and eventually fill a Pi's SD card
+        handler = logging.handlers.RotatingFileHandler(settings.log_path, maxBytes=50_000_000, backupCount=3)
         handler.setFormatter(logging.Formatter("%(message)s"))
         self._logger.addHandler(handler)
 

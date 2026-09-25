@@ -2,6 +2,7 @@
 theme CSS built from the user's colour settings, and small render helpers."""
 from __future__ import annotations
 
+import html
 import os
 import time
 from datetime import datetime
@@ -204,18 +205,23 @@ div[data-testid="stMetric"] {{ background:var(--surface); border:1px solid var(-
 </style>""")
 
 
+def esc(text: object) -> str:
+    """Anything user- or data-controlled goes through this before landing in st.html."""
+    return html.escape(str(text), quote=True)
+
+
 def header(title: str, subtitle: str = "", right_html: str = "") -> None:
-    st.html(f'<div class="dp-header"><div><div class="dp-title">{title}</div>'
-            f'<div class="dp-sub">{subtitle}</div></div><div>{right_html}</div></div>')
+    st.html(f'<div class="dp-header"><div><div class="dp-title">{esc(title)}</div>'
+            f'<div class="dp-sub">{esc(subtitle)}</div></div><div>{right_html}</div></div>')
 
 
 def pill(text: str, kind: str = "", live: bool = False) -> str:
-    return f'<span class="pill {kind}{" live" if live else ""}"><span class="dot"></span>{text}</span>'
+    return f'<span class="pill {kind}{" live" if live else ""}"><span class="dot"></span>{esc(text)}</span>'
 
 
 def tile(label: str, value: str, hint: str = "", kind: str = "") -> str:
-    return f'<div class="tile {kind}"><div class="lbl">{label}</div><div class="val">{value}</div>' + \
-        (f'<div class="hint">{hint}</div>' if hint else "") + "</div>"
+    return f'<div class="tile {kind}"><div class="lbl">{esc(label)}</div><div class="val">{esc(value)}</div>' + \
+        (f'<div class="hint">{esc(hint)}</div>' if hint else "") + "</div>"
 
 
 def fig_layout(fig: go.Figure, height: int | None = None, **kw: Any) -> go.Figure:

@@ -33,3 +33,7 @@ dripbl-fog-server/models/shoplifting_model.joblib
 .DS_Store
 .vscode/
 .idea/
+
+# Model backups and experiment candidates (large, regenerable; the deployed model is tracked)
+dripbl-fog-server/models/backup/
+dripbl-fog-server/models/candidates/

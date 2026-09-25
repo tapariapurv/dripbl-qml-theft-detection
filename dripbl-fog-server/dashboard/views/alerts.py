@@ -112,7 +112,7 @@ with a:
             f'<span class="k">speed</span><span class="v">{v["gait"].get("speed_px_s", 0):.1f} px/s</span>'
             f'<span class="k">stride</span><span class="v">{v["gait"].get("stride_freq_hz", 0):.2f} Hz</span>'
             f'<span class="k">jitter</span><span class="v">{v["gait"].get("jitter_score", 0):.2f}</span>'
-            f'<span class="k">source</span><span class="v">{t.get("source") or "—"}</span></div>')
+            f'<span class="k">source</span><span class="v">{lib.esc(t.get("source") or "—")}</span></div>')
     if st.button("Open in Pipeline Inspector", icon=":material/account_tree:"):
         st.session_state["inspect_trial"] = t["id"]
         st.switch_page("views/inspector.py")
