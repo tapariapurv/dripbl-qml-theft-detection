@@ -13,3 +13,11 @@ qiskit-ibm-runtime==0.45.1
 scikit-learn==1.9.1
 joblib==1.6.0
 matplotlib==3.11.1
+
+# command center: API server + dashboard (api/, dashboard/, start.py)
+fastapi
+uvicorn
+streamlit
+plotly
+httpx          # FastAPI TestClient (tests/test_api.py)
+anthropic      # only imported when judge_mode = "rules+claude"
