@@ -35,13 +35,16 @@ def main() -> None:
     ap.add_argument("--minutes", type=float, default=30)
     ap.add_argument("--api-port", type=int, default=8030)
     ap.add_argument("--dash-port", type=int, default=8630)
+    ap.add_argument("--profile", default="retail", choices=["default", "cctv", "retail"],
+                    help="site profile (retail = the heaviest model, 10 members)")
     args = ap.parse_args()
 
     tmp = Path(tempfile.mkdtemp(prefix="dripbl_soak_"))
     cfg = tmp / "runtime_config.json"
     cfg.write_text(json.dumps({"mode": "mock", "mock_dir": str(ROOT.parent / "training-data" / "dataset-1"),
                                "data_dir": str(tmp / "data"), "log_path": str(tmp / "trials.log"),
-                               "mock_clip_sec": 8.0, "sensitivity": 0.6, "debounce_sec": 2.0}))
+                               "mock_clip_sec": 8.0, "sensitivity": 0.6, "debounce_sec": 2.0,
+                               "site_profile": args.profile}))
     env = {**os.environ, "DRIPBL_CONFIG": str(cfg), "DRIPBL_APP_SETTINGS": str(tmp / "app.json"),
            "DRIPBL_API_KEY": "soak", "DRIPBL_API_URL": f"http://127.0.0.1:{args.api_port}", "PYTHONUNBUFFERED": "1"}
     logs = {n: open(tmp / f"{n}.log", "w") for n in ("node", "api", "dash")}

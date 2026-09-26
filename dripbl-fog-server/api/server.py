@@ -54,6 +54,7 @@ REPORTS = {  # name -> file under reports/ (whitelist: nothing else is readable)
     "dataset2": "combined_d2_metrics.json",
     "deployed": "deployed_default.json",        # written by src/deploy_model.py
     "deployed_retail": "deployed_retail.json",
+    "live_retail": "live_eval_dataset1_retail.json",   # src/live_eval.py: the live system end to end
     "cross_dataset": "xd_experiments.jsonl",    # every cross-dataset experiment
 }
 

@@ -50,23 +50,51 @@ NAMES = {"dataset3_test": "UCF-Crime Test (CCTV)", "dataset1_holdout": "Retail h
 
 with tab_xd:
     st.markdown("Each camera domain runs its own expert, chosen by the node's **site profile**. Every number "
-                "below is measured once on videos no model or threshold ever saw.")
-    experts = [(slot, report(f"deployed{'' if slot == 'default' else '_' + slot}")) for slot in ("default", "retail")]
-    experts = [(slot, e) for slot, e in experts if e]
-    if not experts:
+                "is measured once, on videos no model, threshold or design choice ever saw.")
+    default, retail, live = report("deployed"), report("deployed_retail"), report("live_retail")
+    if not (default or retail):
         st.info("No cross-dataset expert deployed yet (src/train_xd.py, then src/deploy_model.py).")
-    for slot, e in experts:
-        st.markdown(f"##### {'Retail expert' if slot == 'retail' else 'Default / CCTV model'} · `{e.get('experiment')}`")
-        res = e.get("holdout_site_calibrated") or e.get("holdout") or {}
-        cols = st.columns(len(res) or 1)
-        for col, (name, r) in zip(cols, res.items()):
-            col.metric(NAMES.get(name, name), f"{r['accuracy']:.1%}",
-                       help=f"AUC {r['auc']:.3f} · recall {r['recall']:.1%} · {r['clips']} clips · fp {r['fp']} fn {r['fn']}")
-        oof = (e.get("training") or {}).get("oof_clip_auc")
-        if oof:
-            st.caption("Out-of-fold clip AUC on training videos: " + ", ".join(f"{k} {v:.3f}" for k, v in oof.items()))
+
+    def headline(col, label: str, r: dict, extra: str = "") -> None:
+        col.metric(label, f"{r['accuracy']:.1%}", help=f"AUC {r['auc']:.3f} · {r['clips']} clips · "
+                                                     f"{r['fp']} false alarms · {r['fn']} missed" + extra)
+        col.caption(f"AUC {r['auc']:.3f} · recall {r['recall']:.0%} · {r['fp']} false alarms · {r['fn']} missed")
+
+    cols = st.columns(3, gap="large")
+    if default:
+        with cols[0]:
+            st.markdown("##### CCTV / default")
+            st.caption(f"`{default.get('experiment')}` · profiles *default* and *cctv*")
+            headline(st, "UCF-Crime Test", default["holdout"]["dataset3_test"])
+    if retail:
+        with cols[1]:
+            st.markdown("##### Retail")
+            st.caption(f"`{retail.get('experiment')}` · profile *retail*")
+            headline(st, "Retail hold-out (clip level)", retail["holdout_site_calibrated"]["dataset1_holdout"])
+        if live:
+            with cols[2]:
+                sm = live["summary"]
+                st.markdown("##### Retail · live system")
+                st.caption("hold-out videos replayed through the node's real logic")
+                st.metric("Thefts caught", f"{sm['thefts_caught']} of {sm['thefts']}",
+                          help="motion gate, 2 s window, AI judge and debounce, on video time")
+                st.caption(f"{sm['false_alarms']} false alarms on {sm['normals']} normal clips · "
+                           f"accuracy {sm['accuracy']:.1%} · model `{sm['model']}`")
     st.caption("Before this work the single deployed model scored 87.1% on UCF-Crime but 47.2% on retail "
-               "(recall 0) and 50% on the second store camera.")
+               "(recall 0) and caught 0 of 18 held-out retail thefts in the live system.")
+    with st.expander("Outside their domain (why each camera domain gets its own expert)"):
+        rows = []
+        for name, e in (("CCTV / default", default), ("Retail", retail)):
+            for k, r in ((e or {}).get("holdout") or {}).items():
+                rows.append({"model": name, "evaluated on": NAMES.get(k, k), "accuracy": r["accuracy"],
+                             "AUC": r["auc"], "clips": r["clips"]})
+        if rows:
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config={
+                "accuracy": st.column_config.NumberColumn(format="%.3f"), "AUC": st.column_config.NumberColumn(format="%.3f")})
+        st.caption("A model trained on one camera domain is near chance on another, and on a camera never seen before "
+                   "scores follow the scene rather than the act. Calibrate each new camera (Settings → Detection) and, "
+                   "for full accuracy, fine-tune on its clips with src/add_camera.py. The second store camera has only "
+                   "2 hold-out clips, too few for a meaningful percentage.")
 
 with tab_model:
     m = report("metrics")

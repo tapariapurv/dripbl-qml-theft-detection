@@ -2,14 +2,14 @@
   "summary": {
     "set": "dataset1",
     "profile": "retail",
-    "model": "5-member xd_retail_tiny_m_ft_5fold (clip 0.670, motion)",
+    "model": "10-member combo_retail_r18m_ft+retail_tiny_m_ft (motion)",
     "clips": 36,
-    "accuracy": 0.8611111111111112,
-    "thefts_caught": 15,
+    "accuracy": 0.8055555555555556,
+    "thefts_caught": 14,
     "thefts": 18,
-    "false_alarms": 2,
+    "false_alarms": 3,
     "normals": 18,
-    "auc_max_suspicion": 0.8950617283950617
+    "auc_max_suspicion": 0.888888888888889
   },
   "clips": [
     {
@@ -17,7 +17,7 @@
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.17975067617446222
+      "max_suspicion": 0.3255417950496927
     },
     {
       "clip": "normal-13",
@@ -31,49 +31,49 @@
       "label": 0,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.9385894973951325
+      "max_suspicion": 0.8634067075107863
     },
     {
       "clip": "normal-26",
       "label": 0,
       "trials": 1,
-      "alert": false,
-      "max_suspicion": 0.36661982773713714
+      "alert": true,
+      "max_suspicion": 0.5419753068706483
     },
     {
       "clip": "normal-34",
       "label": 0,
       "trials": 3,
       "alert": false,
-      "max_suspicion": 0.3290794339792264
+      "max_suspicion": 0.4032553604726274
     },
     {
       "clip": "normal-36",
       "label": 0,
       "trials": 3,
       "alert": false,
-      "max_suspicion": 0.21313245563468025
+      "max_suspicion": 0.3765551809450804
     },
     {
       "clip": "normal-4",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.11043668223378947
+      "max_suspicion": 0.2599416050334451
     },
     {
       "clip": "normal-44",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.20463786060136654
+      "max_suspicion": 0.34065171254581605
     },
     {
       "clip": "normal-46",
       "label": 0,
       "trials": 3,
       "alert": false,
-      "max_suspicion": 0.18702534718825364
+      "max_suspicion": 0.3125767707226918
     },
     {
       "clip": "normal-48",
@@ -87,182 +87,182 @@
       "label": 0,
       "trials": 3,
       "alert": false,
-      "max_suspicion": 0.18714362686422706
+      "max_suspicion": 0.33116210756777686
     },
     {
       "clip": "normal-6",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.08662820780198903
+      "max_suspicion": 0.21713017904153384
     },
     {
       "clip": "normal-67",
       "label": 0,
       "trials": 2,
       "alert": false,
-      "max_suspicion": 0.14226369593920768
+      "max_suspicion": 0.3547349481771997
     },
     {
       "clip": "normal-74",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.2763642659786235
+      "max_suspicion": 0.48281291265521326
     },
     {
       "clip": "normal-77",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.1460279345778287
+      "max_suspicion": 0.2510600843878409
     },
     {
       "clip": "normal-79",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.20189395996611054
+      "max_suspicion": 0.329263797829212
     },
     {
       "clip": "normal-86",
       "label": 0,
       "trials": 4,
       "alert": false,
-      "max_suspicion": 0.12840266242107357
+      "max_suspicion": 0.2783787783235075
     },
     {
       "clip": "normal-90",
       "label": 0,
       "trials": 7,
       "alert": true,
-      "max_suspicion": 0.9618813377000135
+      "max_suspicion": 0.8484804210091732
     },
     {
       "clip": "shoplifting-15",
       "label": 1,
       "trials": 2,
-      "alert": true,
-      "max_suspicion": 0.6558611274918571
+      "alert": false,
+      "max_suspicion": 0.46715347937999424
     },
     {
       "clip": "shoplifting-16",
       "label": 1,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.9535651723772931
+      "max_suspicion": 0.8811226680725157
     },
     {
       "clip": "shoplifting-23",
       "label": 1,
       "trials": 2,
       "alert": true,
-      "max_suspicion": 0.9923177629545068
+      "max_suspicion": 0.847855809870063
     },
     {
       "clip": "shoplifting-28",
       "label": 1,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.980428181454783
+      "max_suspicion": 0.9113562465027596
     },
     {
       "clip": "shoplifting-30",
       "label": 1,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.9234285929266467
+      "max_suspicion": 0.8453541040093965
     },
     {
       "clip": "shoplifting-32",
       "label": 1,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.8327438586986154
+      "max_suspicion": 0.6469754178254548
     },
     {
       "clip": "shoplifting-38",
       "label": 1,
       "trials": 2,
       "alert": true,
-      "max_suspicion": 0.7876734971504938
+      "max_suspicion": 0.5895122708005042
     },
     {
       "clip": "shoplifting-40",
       "label": 1,
       "trials": 2,
       "alert": false,
-      "max_suspicion": 0.43757834761376113
+      "max_suspicion": 0.4131279175608327
     },
     {
       "clip": "shoplifting-42",
       "label": 1,
       "trials": 2,
       "alert": true,
-      "max_suspicion": 0.7513215520045804
+      "max_suspicion": 0.6467336009722894
     },
     {
       "clip": "shoplifting-43",
       "label": 1,
       "trials": 5,
       "alert": true,
-      "max_suspicion": 0.937242908945469
+      "max_suspicion": 0.7190277108016074
     },
     {
       "clip": "shoplifting-57",
       "label": 1,
       "trials": 3,
       "alert": true,
-      "max_suspicion": 0.7985147793501306
+      "max_suspicion": 0.700075979980936
     },
     {
       "clip": "shoplifting-58",
       "label": 1,
       "trials": 2,
       "alert": false,
-      "max_suspicion": 0.18080949021271908
+      "max_suspicion": 0.3672564196210373
     },
     {
       "clip": "shoplifting-6",
       "label": 1,
       "trials": 3,
       "alert": true,
-      "max_suspicion": 0.9995295251358998
+      "max_suspicion": 0.9175919629439444
     },
     {
       "clip": "shoplifting-60",
       "label": 1,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.944838647594104
+      "max_suspicion": 0.8793491594373003
     },
     {
       "clip": "shoplifting-61",
       "label": 1,
       "trials": 3,
       "alert": true,
-      "max_suspicion": 0.7994455867818968
+      "max_suspicion": 0.7102892769223245
     },
     {
       "clip": "shoplifting-70",
       "label": 1,
       "trials": 1,
       "alert": false,
-      "max_suspicion": 0.3469690630308277
+      "max_suspicion": 0.4328864890002456
     },
     {
       "clip": "shoplifting-72",
       "label": 1,
       "trials": 4,
       "alert": true,
-      "max_suspicion": 0.9571428136420619
+      "max_suspicion": 0.8541871930808271
     },
     {
       "clip": "shoplifting-91",
       "label": 1,
       "trials": 3,
       "alert": true,
-      "max_suspicion": 0.9733531539617828
+      "max_suspicion": 0.855190935678112
     }
   ]
 }

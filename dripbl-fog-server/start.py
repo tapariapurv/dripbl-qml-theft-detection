@@ -48,8 +48,12 @@ def main() -> None:
     sys.path.insert(0, str(ROOT))
     from config import ConfigStore
     cfg = ConfigStore()
-    if args.mock or args.live:
-        cfg.save(dataclasses.replace(cfg.settings, mode="mock" if args.mock else "live"))
+    if args.mock:
+        # mock mode replays retail footage (dataset-1 hold-out), so run the retail expert on it
+        cfg.save(dataclasses.replace(cfg.settings, mode="mock", site_profile="retail"))
+        print("mock mode: site profile set to 'retail' (the clips are retail footage)")
+    elif args.live:
+        cfg.save(dataclasses.replace(cfg.settings, mode="live"))
 
     # Create the API key before anything starts, so the dashboard and API agree on it.
     data = ROOT / cfg.settings.data_dir

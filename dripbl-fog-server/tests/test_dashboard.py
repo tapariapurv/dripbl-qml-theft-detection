@@ -43,6 +43,15 @@ def start_api() -> uvicorn.Server:
     raise RuntimeError("API did not start")
 
 
+# Content each page must show once data exists: catches a section silently disappearing
+# (a render with no exception is not enough: a deleted tab body renders "fine").
+EXPECT = {
+    "views/research.py": {"Clip accuracy", "UCF-Crime Test", "Logical qubits"},
+    "views/settings.py": {"Sensitivity"},
+    "views/inspector.py": {"Crime signal"},
+}
+
+
 def render_all(state: str) -> None:
     for page in PAGES:
         at = AppTest.from_file(str(ROOT / "dashboard" / "app.py"), default_timeout=60)
@@ -51,7 +60,10 @@ def render_all(state: str) -> None:
         at.switch_page(page)
         at.run()
         assert not at.exception, (state, page, [str(e.message)[:300] for e in at.exception])
-        texts = " ".join(m.value for m in at.markdown) + " ".join(str(e.value) for e in at.error)
+        if state == "populated" and page in EXPECT:
+            labels = {m.label for m in at.metric} | {w.label for w in at.slider}
+            missing = EXPECT[page] - labels
+            assert not missing, (page, "missing content", missing)
         print(f"ok: {state:10s} {page:22s} ({len(at.markdown)} markdown, {len(at.error)} errors shown)")
 
 
