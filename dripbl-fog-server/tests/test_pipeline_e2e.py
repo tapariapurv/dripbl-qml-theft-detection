@@ -18,7 +18,8 @@ MODEL_PATH = ROOT / "models" / "qsvm_model.joblib"
 # Floors are regression guards, set just under the measured values so a real
 # regression trips them while ordinary sampling noise does not.
 MIN_FRAME_ACCURACY = 0.78   # measured 0.845 on the held-out Test split
-MIN_CLIP_ACCURACY = 0.83    # measured 0.871 (clip-level is the headline metric)
+MIN_CLIP_ACCURACY = 0.83    # measured 0.897 (CCTV expert; 0.871 for the original model)
+MIN_RETAIL_CLIP_ACCURACY = 0.75  # retail expert on the dataset-1 hold-out (36 clips: 1 clip = 2.8 pts)
 
 
 def test_sampling_is_split_clean() -> None:
@@ -41,12 +42,15 @@ def test_sampling_is_split_clean() -> None:
 def test_artifact_round_trip() -> None:
     assert MODEL_PATH.is_file(), f"missing {MODEL_PATH} — run src/train_qsvm.py first"
     artifact = joblib.load(MODEL_PATH)
-    for key in ("svm_classifier", "pca_transformer", "support_vectors",
-                "support_vector_labels", "cnn_state_dict", "metadata"):
-        assert key in artifact, f"artifact missing key: {key}"
-    assert artifact["support_vectors"].shape[1] == 4
-    assert len(artifact["support_vectors"]) == len(artifact["support_vector_labels"])
-    print("ok: artifact_round_trip")
+    assert "metadata" in artifact
+    # format 2 (train_xd.py) keeps everything per ensemble member; format 1 also at top level
+    members = artifact["ensemble"] if artifact.get("format") == 2 else [artifact]
+    encoder = "backbone_state" if artifact.get("format") == 2 else "cnn_state_dict"
+    for m in members:
+        for key in ("svm_classifier", "pca_transformer", "support_vectors", encoder):
+            assert key in m, f"ensemble member missing key: {key}"
+        assert m["support_vectors"].shape[1] == 4
+    print(f"ok: artifact_round_trip (format {artifact.get('format', 1)}, {len(members)} members)")
 
 
 def test_live_predict_frame() -> None:
@@ -94,6 +98,22 @@ def test_accuracy_on_held_out_test_split() -> None:
     print(f"ok: accuracy_on_held_out_test_split (frame {frame_acc:.3f}, clip {clip_acc:.3f} over {len(labels)} clips)")
 
 
+def test_retail_holdout_accuracy() -> None:
+    """The retail expert on the fixed dataset-1 hold-out (36 clips no model trained on)."""
+    retail = MODEL_PATH.parent / "retail_model.joblib"
+    if not retail.is_file():
+        print("skip: retail_holdout_accuracy (no models/retail_model.joblib)")
+        return
+    import cross_data as C
+    fn, thr = C.artifact_margin_fn(retail)
+    clf_meta = joblib.load(retail)["metadata"]
+    d = C.dataset1_part("holdout")
+    labels, scores = C.clip_scores(fn(d["rgb"], d["motion"], d["vid"]), d["vid"], d["y"])
+    r = C.report(labels, scores, clf_meta.get("clip_thresholds", {}).get("retail", thr))
+    assert r["accuracy"] >= MIN_RETAIL_CLIP_ACCURACY, f"retail hold-out accuracy {r['accuracy']:.3f}"
+    print(f"ok: retail_holdout_accuracy ({r['accuracy']:.3f}, AUC {r['auc']:.3f}, {r['clips']} clips)")
+
+
 def test_quantum_encoder_matches_qiskit() -> None:
     """The fast analytic encoder must stay identical to qiskit's simulator."""
     from quantum_kernel import verify_fast_encode
@@ -107,5 +127,6 @@ if __name__ == "__main__":
     test_artifact_round_trip()
     test_live_predict_frame()
     test_accuracy_on_held_out_test_split()
+    test_retail_holdout_accuracy()
     test_quantum_encoder_matches_qiskit()
     print("ALL TESTS PASSED")

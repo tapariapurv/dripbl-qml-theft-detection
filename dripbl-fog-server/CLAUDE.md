@@ -112,6 +112,34 @@ Gotchas:
 - Mock mode replays all of dataset-1, including the clips the retail expert trained on. For an honest
   retail number use `src/cross_data.py <model>` (fixed hold-out) rather than the mock scoreboard.
 
+## Cross-dataset models (`src/cross_data.py`, `xd_experiments.py`, `train_xd.py`)
+
+The original model scored 0.871 on UCF-Crime but chance on retail (0.472, recall 0). Findings, so they
+are not re-litigated (all on fixed video-disjoint hold-outs; see `reports/xd_experiments.jsonl`):
+
+| change | result | verdict |
+|---|---|---|
+| one model trained jointly on all datasets | UCF 0.82-0.87, retail AUC 0.82-0.86 | rejected: UCF's 20k frames pull the encoder away from retail |
+| retail trained alone | retail AUC 0.895 vs 0.843 jointly | **kept**: one expert per camera domain (`site_profile`) |
+| frozen Kinetics R3D-18 video model | retail AUC 0.82, 80x the CPU | rejected |
+| 128 px instead of 64 px retail frames | no gain | rejected |
+| top-k clip aggregation, flip TTA | within noise | rejected |
+| ResNet-18 CCTV expert (UCF only, 5-fold) | UCF Test **0.897** (was 0.871), 6 FP vs 10 | **deployed** as default |
+| transfer: UCF-trained encoder -> fine-tune on retail | retail OOF AUC 0.914 vs 0.879 from scratch | **kept** |
+| ensemble of retail transfer models (combine_experts.py) | retail OOF AUC 0.9245 | **deployed** as retail expert |
+| zero-shot on an unseen camera (dataset-2, all 8 videos) | every clip alerts; normal/theft pairs score alike | not solved: scores track the scene. Use `add_camera.py` |
+
+Rules that keep these numbers honest: hold-outs are scored once, after all choices; models are chosen by
+out-of-fold AUC (within 0.01, the cheaper one); per-site thresholds come from that site's out-of-fold clips.
+
+New camera: put labelled clips in `training-data/<site>/{normal,theft}/*.mp4` and run
+`src/add_camera.py <site>`: it holds out 20% of the site's videos, fine-tunes from the deployed retail expert
+with retail replay (no forgetting), sets the site threshold on out-of-fold clips and reports both hold-outs.
+
+Models are too large for git: `src/deploy_model.py` installs (float16, drift-checked, backup kept),
+`src/publish_models.py <tag>` uploads to a GitHub Release + writes `models/MANIFEST.json`,
+`src/fetch_models.py` downloads and verifies (install.sh runs it).
+
 ## Offline QSVM training pipeline (`src/`, `models/`, `reports/`)
 
 Trains the quantum-kernel SVM that the live node deploys. Separate from the

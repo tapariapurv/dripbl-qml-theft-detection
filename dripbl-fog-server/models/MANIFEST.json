@@ -1,11 +1,15 @@
 {
   "release": "models-2026-09-26",
   "repo": "tapariapurv/dripbl-qml-theft-detection",
-  "published": "2026-09-26 04:44",
+  "published": "2026-09-26 06:27",
   "files": {
     "qsvm_model.joblib": {
       "sha256": "ab79f8abba23d94b1886d6929dfe0668f094f8275f07c8b2ce6ec0c0546bb84c",
       "bytes": 104713797
+    },
+    "retail_model.joblib": {
+      "sha256": "70ab62f26d646fbcb618b30298012effb7812f297614a268f37ecf1a519deab9",
+      "bytes": 230098476
     }
   }
 }

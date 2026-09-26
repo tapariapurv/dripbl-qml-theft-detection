@@ -53,6 +53,27 @@ SOURCES = ("d3", "d1", "d2")
 SELECT = ("d3", "d1")   # dataset-2 has 2 val clips: AUC is 0 or 1, pure noise for selection
 
 
+def sources_in(d: dict) -> list[str]:
+    """Datasets present in `d`, built-ins first in their fixed order, then your own sites
+    (x:<name>) sorted. The order matters: fold assignment draws random numbers per dataset."""
+    present = set(d["src"].tolist())
+    return [s for s in SOURCES if s in present] + sorted(present - set(SOURCES))
+
+
+def select_in(d: dict) -> list[str]:
+    """Datasets used to choose epochs/thresholds: the reliable built-ins plus your own sites."""
+    return [s for s in sources_in(d) if s in SELECT or s.startswith("x:")]
+
+
+def mix(cfg: "Cfg") -> list[tuple[str, float]]:
+    """(dataset, share of each batch). Your own sites take `extra_share`, split equally."""
+    base = [(s, sh) for s, sh in zip(SOURCES, cfg.share)]
+    if not cfg.extra:
+        return base
+    scale = 1.0 - cfg.extra_share
+    return [(s, sh * scale) for s, sh in base] + [(f"x:{n}", cfg.extra_share / len(cfg.extra)) for n in cfg.extra]
+
+
 @dataclasses.dataclass
 class Cfg:
     name: str
@@ -72,6 +93,8 @@ class Cfg:
     size: int = 64                    # frame resolution; dataset-3 (64 px only) is upsampled to it
     sources: tuple[str, ...] = ("d3", "d1", "d2")   # datasets to train on (single-dataset studies)
     init_from: str = ""               # start the encoder from this model's weights (transfer learning)
+    extra: tuple[str, ...] = ()       # your own sites: training-data/<name>/{normal,theft}/*.mp4
+    extra_share: float = 0.5          # share of each batch drawn from `extra`
 
 
 CONFIGS = {c.name: c for c in [
@@ -146,6 +169,12 @@ def load_train(cfg: Cfg) -> tuple[dict, dict]:
         val = _split_videos(d["vid"], d["y"], 0.15 if src == "d1" else 0.34, cfg.seed)
         add("fit", x[~val], d["y"][~val], d["vid"][~val], src)
         add("val", x[val], d["y"][val], d["vid"][val], src)
+    for name in cfg.extra:  # your own sites: their train split (the hold-out is never touched here)
+        d = C.custom_part(name, "train", cfg.size)
+        x = np.concatenate([d["rgb"], d["motion"]], -1) if cfg.motion else d["rgb"]
+        val = _split_videos(d["vid"], d["y"], 0.2, cfg.seed)
+        add("fit", x[~val], d["y"][~val], d["vid"][~val], f"x:{name}")
+        add("val", x[val], d["y"][val], d["vid"][val], f"x:{name}")
     cat = lambda rows: {k: np.concatenate([r[k] for r in rows]) for k in rows[0]}  # noqa: E731
     return cat(parts["fit"]), cat(parts["val"])
 
@@ -207,7 +236,7 @@ def forward(model: nn.Module, x: np.ndarray, latent: bool) -> np.ndarray:
 
 def per_source_clip_auc(scores: np.ndarray, d: dict) -> dict[str, float]:
     out = {}
-    for src in SOURCES:
+    for src in sources_in(d):
         m = d["src"] == src
         if m.sum() == 0:
             continue
@@ -253,7 +282,7 @@ def train(cfg: Cfg, fit: dict, val: dict) -> tuple[nn.Module, dict]:
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=cfg.lr, total_steps=total)
     # sampling weights: each dataset gets its share of every batch, classes balanced within it
     w = np.zeros(len(fit["y"]))
-    for s, share in zip(SOURCES, cfg.share):
+    for s, share in mix(cfg):
         for label in (0, 1):
             m = (fit["src"] == s) & (fit["y"] == label)
             if m.any():
@@ -275,7 +304,7 @@ def train(cfg: Cfg, fit: dict, val: dict) -> tuple[nn.Module, dict]:
             loss_sum += float(loss)
         logits = forward(model, val["x"], latent=False)
         aucs = per_source_clip_auc(logits[:, 1] - logits[:, 0], val)
-        score = float(np.mean([aucs[s] for s in SELECT if s in aucs]))
+        score = float(np.mean([aucs[s] for s in select_in(val) if s in aucs]))
         hist.append({"epoch": epoch + 1, "loss": loss_sum / cfg.steps_per_epoch, "val_clip_auc": aucs})
         mark = ""
         if score >= best:
@@ -291,7 +320,7 @@ def train(cfg: Cfg, fit: dict, val: dict) -> tuple[nn.Module, dict]:
 def balanced_threshold(val_scores: np.ndarray, val: dict) -> tuple[float, dict]:
     """Clip threshold maximising the MEAN of per-dataset clip accuracies (val only)."""
     per = {}
-    for src in SELECT:
+    for src in select_in(val):
         m = val["src"] == src
         if m.sum() and len(set(val["y"][m].tolist())) > 1:
             per[src] = C.clip_scores(val_scores[m], val["vid"][m], val["y"][m])
@@ -309,7 +338,7 @@ def balanced_threshold(val_scores: np.ndarray, val: dict) -> tuple[float, dict]:
 def fit_quantum_head(cfg: Cfg, model: nn.Module, fit: dict, val: dict) -> dict:
     rng = np.random.default_rng(cfg.seed)
     pick = []
-    for s, share in zip(SOURCES, cfg.share):  # QSVM fit frames follow the same dataset shares
+    for s, share in mix(cfg):  # QSVM fit frames follow the same dataset shares
         for label in (0, 1):
             idx = np.flatnonzero((fit["src"] == s) & (fit["y"] == label))
             n = min(len(idx), max(20, int(cfg.fit_per_label * share)))
@@ -327,7 +356,7 @@ def fit_quantum_head(cfg: Cfg, model: nn.Module, fit: dict, val: dict) -> dict:
             for c in T.C_GRID:
                 svc = SVC(kernel="precomputed", C=c, class_weight="balanced").fit(k_fit, y_fit)
                 aucs = per_source_clip_auc(svc.decision_function(k_val), val)
-                score = float(np.mean([aucs[s] for s in SELECT if s in aucs]))
+                score = float(np.mean([aucs[s] for s in select_in(val) if s in aucs]))
                 if score > best[0]:
                     best = (score, (mode, scale, c, aucs))
     score, (mode, scale, c, aucs) = best
@@ -355,7 +384,7 @@ def run(cfg: Cfg) -> dict:
     t0 = time.time()
     print(f"\n=== {cfg.name} on {DEVICE} ===", flush=True)
     fit, val = load_train(cfg)
-    print(f"  fit {len(fit['y'])} frames " + " ".join(f"{s}={int((fit['src'] == s).sum())}" for s in SOURCES)
+    print(f"  fit {len(fit['y'])} frames " + " ".join(f"{s}={int((fit['src'] == s).sum())}" for s in sources_in(fit))
           + f" | val {len(val['y'])} frames", flush=True)
     model, info = train(cfg, fit, val)
     head = fit_quantum_head(cfg, model, fit, val)

@@ -43,7 +43,7 @@ def assign_folds(pool: dict, folds: int, seed: int) -> np.ndarray:
     script can tell which ensemble member never saw a given clip (member k <-> fold k)."""
     fold_of: dict[str, int] = {}
     rng = np.random.default_rng(seed)
-    for s in X.SOURCES:
+    for s in X.sources_in(pool):   # built-ins first in fixed order: existing folds stay identical
         for label in (0, 1):
             names = sorted(set(pool["vid"][(pool["src"] == s) & (pool["y"] == label)].tolist()))
             for i, j in enumerate(rng.permutation(len(names))):
@@ -64,11 +64,18 @@ def main() -> None:
         cfg = dataclasses.replace(cfg, epochs=args.epochs)
     if args.steps:
         cfg = dataclasses.replace(cfg, steps_per_epoch=args.steps)
+    run(cfg, args.folds, Path(args.out))
+
+
+def run(cfg: X.Cfg, folds: int, out: Path) -> dict:
+    """Train the k-fold ensemble for `cfg`, save it to `out`, score the hold-outs once."""
     t0 = time.time()
+    args = argparse.Namespace(folds=folds, out=str(out))
 
     pool = training_pool(cfg)
     print(f"[train_xd] {cfg.name}: {len(pool['y'])} frames, "
-          + " ".join(f"{s}={len(set(pool['vid'][pool['src'] == s].tolist()))} videos" for s in X.SOURCES), flush=True)
+          + " ".join(f"{s}={len(set(pool['vid'][pool['src'] == s].tolist()))} videos" for s in X.sources_in(pool)),
+          flush=True)
 
     fold = assign_folds(pool, args.folds, cfg.seed)
 
@@ -92,7 +99,8 @@ def main() -> None:
     threshold, oof_acc = X.balanced_threshold(oof, pool)
     import experiments as E
     site_thresholds = {"default": threshold}
-    for site, src in (("cctv", "d3"), ("retail", "d1")):  # a node calibrated to its camera domain
+    sites = [("cctv", "d3"), ("retail", "d1")] + [(f"x:{n}", f"x:{n}") for n in cfg.extra]
+    for site, src in sites:  # a node calibrated to its camera domain
         m = pool["src"] == src
         if not m.any():
             continue
@@ -147,6 +155,8 @@ def main() -> None:
     for name, r in site_results.items():
         print(f"    {name:18s} acc={r['accuracy']:.3f} recall={r['recall']:.3f} fp={r['fp']} fn={r['fn']}")
     print(f"saved -> {out}  ({metrics['minutes']} min)")
+    return {"artifact": out, "site_thresholds": site_thresholds, "oof_clip_auc": oof_auc, "oof_clip_acc": oof_acc,
+            "holdout": results, "holdout_site_calibrated": site_results}
 
 
 if __name__ == "__main__":

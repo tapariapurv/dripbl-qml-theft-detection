@@ -1,0 +1,72 @@
+{
+  "summary": {
+    "set": "dataset2all",
+    "profile": "retail",
+    "model": "5-member xd_retail_tiny_m_ft_d1only_5fold (clip 0.330, motion)",
+    "clips": 8,
+    "accuracy": 0.5,
+    "thefts_caught": 4,
+    "thefts": 4,
+    "false_alarms": 4,
+    "normals": 4,
+    "auc_max_suspicion": 0.625
+  },
+  "clips": [
+    {
+      "clip": "not_shoplifting1",
+      "label": 0,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.5920359192685692
+    },
+    {
+      "clip": "not_shoplifting2",
+      "label": 0,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.871659106849378
+    },
+    {
+      "clip": "not_shoplifting3",
+      "label": 0,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.5898278918294461
+    },
+    {
+      "clip": "not_shoplifting4",
+      "label": 0,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.8397285174559299
+    },
+    {
+      "clip": "shoplifting1",
+      "label": 1,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.6206061441937515
+    },
+    {
+      "clip": "shoplifting2",
+      "label": 1,
+      "trials": 2,
+      "alert": true,
+      "max_suspicion": 0.8558603939703749
+    },
+    {
+      "clip": "shoplifting3",
+      "label": 1,
+      "trials": 3,
+      "alert": true,
+      "max_suspicion": 0.6030350582882846
+    },
+    {
+      "clip": "shoplifting4",
+      "label": 1,
+      "trials": 3,
+      "alert": true,
+      "max_suspicion": 0.8423580493913282
+    }
+  ]
+}

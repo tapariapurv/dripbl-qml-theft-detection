@@ -52,11 +52,20 @@ def main() -> None:
                 m[key] = {k: v.half() if v.is_floating_point() else v for k, v in m[key].items()}
     half = live.with_suffix(".half.tmp")
     joblib.dump(art, half, compress=3)
-    probe = np.random.default_rng(1).integers(0, 255, (64, 64, 64, clf.in_channels), dtype=np.uint8)
-    drift = float(np.abs(clf.margins_from_arrays(probe) - LiveTheftClassifier(half).margins_from_arrays(probe)).max())
-    assert drift < 0.02, f"float16 storage changes margins by {drift:.4f}; not deploying"
-    print(f"float16 storage: max margin change {drift:.5f}, {cand.stat().st_size / 1e6:.0f} MB -> "
-          f"{half.stat().st_size / 1e6:.0f} MB")
+    probe = np.random.default_rng(1).integers(0, 255, (128, 64, 64, clf.in_channels), dtype=np.uint8)
+    full, halved = clf.margins_from_arrays(probe), LiveTheftClassifier(half).margins_from_arrays(probe)
+    drift, spread = float(np.abs(full - halved).max()), float(full.std()) or 1.0
+    thr = float(meta.get("clip_threshold", 0.0))
+    flips = int(((full > thr) != (halved > thr)).sum())
+    # scale-aware: ensembles of standardised members have margins in std units
+    if drift < 0.05 * spread and flips == 0:
+        print(f"float16 storage: max margin change {drift:.4f} ({drift / spread:.2%} of spread), 0 decisions flip; "
+              f"{cand.stat().st_size / 1e6:.0f} MB -> {half.stat().st_size / 1e6:.0f} MB")
+    else:  # not provably harmless: ship full precision (releases take files up to 2 GB)
+        print(f"float16 would change margins by {drift / spread:.1%} of spread ({flips} decisions flip): "
+              f"keeping full precision")
+        half.unlink()
+        shutil.copy2(cand, half)
     if live.exists():
         backup = ROOT / "models" / "backup" / f"{live.stem}_{time.strftime('%Y%m%d_%H%M%S')}.joblib"
         backup.parent.mkdir(parents=True, exist_ok=True)

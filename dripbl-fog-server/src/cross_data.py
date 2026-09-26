@@ -132,6 +132,51 @@ def dataset2_part(part: str, size: int = SIZE) -> dict[str, np.ndarray]:
     return {k: v[keep] for k, v in d.items()}
 
 
+# ------------------------------------------------------- your own camera's footage
+
+THEFT_FOLDERS = ("theft", "shoplifting")
+
+
+def custom_videos(name: str) -> list[tuple[Path, int, str]]:
+    """training-data/<name>/normal/*.mp4 and .../theft (or shoplifting)/*.mp4."""
+    root = DATA / name
+    pairs = [(p, 0, f"x:{name}:{p.stem}") for p in sorted((root / "normal").glob("*.mp4"))]
+    for folder in THEFT_FOLDERS:
+        pairs += [(p, 1, f"x:{name}:{p.stem}") for p in sorted((root / folder).glob("*.mp4"))]
+    n_theft = sum(label for _, label, _ in pairs)
+    if n_theft < 2 or len(pairs) - n_theft < 2:
+        raise ValueError(f"{root} needs >= 2 videos in normal/ and >= 2 in theft/ (found "
+                         f"{len(pairs) - n_theft} normal, {n_theft} theft)")
+    return pairs
+
+
+def load_custom(name: str, size: int = SIZE) -> dict[str, np.ndarray]:
+    return _extract_folder(custom_videos(name), ROOT / "reports" / f"x_{name}_{size}.npz", size)
+
+
+def custom_split(name: str) -> dict[str, list[str]]:
+    """Fixed stratified 80/20 split by video (at least one hold-out video per class)."""
+    path = ROOT / "reports" / f"x_{name}_split.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    rng = np.random.default_rng(SEED)
+    split: dict[str, list[str]] = {"train": [], "holdout": []}
+    for label in (0, 1):
+        vids = sorted(v for _, lab, v in custom_videos(name) if lab == label)
+        order = rng.permutation(len(vids))
+        n_hold = max(1, round(len(vids) * 0.2))
+        split["holdout"] += [vids[i] for i in order[:n_hold]]
+        split["train"] += [vids[i] for i in order[n_hold:]]
+    path.write_text(json.dumps(split, indent=1))
+    return split
+
+
+def custom_part(name: str, part: str, size: int = SIZE) -> dict[str, np.ndarray]:
+    d = load_custom(name, size)
+    keep = np.isin(d["vid"], custom_split(name)[part])
+    return {k: v[keep] for k, v in d.items()}
+
+
 def load_dataset3_test(frames_per_video: int = 60) -> dict[str, np.ndarray]:
     import experiments as E
     import train_qsvm as T

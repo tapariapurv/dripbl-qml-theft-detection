@@ -57,9 +57,9 @@ class TheftDetector:
         self.motion = self._clf.in_channels == 6
         self._history: deque[tuple[float, np.ndarray]] = deque()   # (t, 64x64 BGR)
         self._window: deque[tuple[float, float]] = deque()         # (t, margin)
-        acc = meta.get("clip_test_accuracy", float("nan"))
-        self.description = (f"{meta.get('ensemble_size', 1)}-member {meta.get('experiment', 'qsvm')} "
-                            f"(clip {acc:.3f}{', motion' if self.motion else ''})")
+        # model identity only: its accuracy depends on the domain and lives on the Research page
+        self.description = (f"{meta.get('ensemble_size', 1)}-member {meta.get('experiment', 'qsvm')}"
+                            f"{' (motion)' if self.motion else ''}")
 
     @staticmethod
     def model_path_for(settings: Settings) -> Path:
