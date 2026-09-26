@@ -1,0 +1,103 @@
+{
+  "artifact": "models/candidates/retail_r18m_ft_omar.joblib",
+  "config": {
+    "name": "retail_r18m_ft_omar",
+    "backbone": "resnet18",
+    "motion": true,
+    "input_size": 128,
+    "epochs": 4,
+    "steps_per_epoch": 300,
+    "batch": 128,
+    "lr": 0.00015,
+    "weight_decay": 0.0005,
+    "dropout": 0.5,
+    "share": [
+      0.0,
+      0.85,
+      0.15
+    ],
+    "d3_frames": 20,
+    "fit_per_label": 1500,
+    "seed": 42,
+    "size": 64,
+    "sources": [
+      "d1",
+      "d2"
+    ],
+    "init_from": "models/candidates/cctv_r18.joblib",
+    "extra": [
+      "omar"
+    ],
+    "extra_share": 0.4
+  },
+  "folds": 5,
+  "threshold": 0.7716978315243764,
+  "oof_clip_auc": {
+    "d1": 0.8915165165165165,
+    "d2": 0.11111111111111112,
+    "x:omar": 0.9988863413036357
+  },
+  "oof_clip_acc": {
+    "d1": 0.8561643835616438,
+    "x:omar": 0.9937791601866252
+  },
+  "site_thresholds": {
+    "default": 0.7716978315243764,
+    "retail": 0.75605,
+    "x:omar": 0.6457999999999999
+  },
+  "holdout": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.6391752577319587,
+      "recall": 0.3181818181818182,
+      "fp": 40,
+      "fn": 30,
+      "auc": 0.6010606060606061
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.8055555555555556,
+      "recall": 0.7777777777777778,
+      "fp": 3,
+      "fn": 4,
+      "auc": 0.8611111111111112
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 1.0,
+      "fp": 1,
+      "fn": 0,
+      "auc": 0.0
+    }
+  },
+  "holdout_site_calibrated": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.6391752577319587,
+      "recall": 0.3181818181818182,
+      "fp": 40,
+      "fn": 30,
+      "auc": 0.6010606060606061
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.8055555555555556,
+      "recall": 0.7777777777777778,
+      "fp": 3,
+      "fn": 4,
+      "auc": 0.8611111111111112
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 1.0,
+      "fp": 1,
+      "fn": 0,
+      "auc": 0.0
+    }
+  },
+  "minutes": 138.7,
+  "protocol": "k-fold by video over dataset-3 Train + dataset-1 train split + dataset-2 train clips; threshold from pooled out-of-fold clips; hold-outs scored once via LiveTheftClassifier"
+}

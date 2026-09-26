@@ -1,20 +1,21 @@
 {
-  "experiment": "combo_retail_r18m_ft+retail_tiny_m_ft",
-  "ensemble_size": 10,
+  "experiment": "xd_retail_tiny_m_ft_omar_5fold",
+  "ensemble_size": 5,
   "in_channels": 6,
-  "clip_threshold": 0.12125443415422565,
+  "clip_threshold": 0.48321487825110165,
   "clip_thresholds": {
-    "default": 0.12125443415422565,
-    "retail": 0.11982499999999999
+    "default": 0.48321487825110165,
+    "retail": 0.51745,
+    "x:omar": 0.25539999999999996
   },
   "holdout": {
     "dataset3_test": {
       "clips": 194,
-      "accuracy": 0.7628865979381443,
-      "recall": 0.022727272727272728,
-      "fp": 3,
-      "fn": 43,
-      "auc": 0.5027272727272727
+      "accuracy": 0.5567010309278351,
+      "recall": 0.25,
+      "fp": 53,
+      "fn": 33,
+      "auc": 0.40272727272727266
     },
     "dataset1_holdout": {
       "clips": 36,
@@ -27,64 +28,85 @@
     "dataset2_holdout": {
       "clips": 2,
       "accuracy": 0.5,
-      "recall": 0.0,
-      "fp": 0,
-      "fn": 1,
+      "recall": 1.0,
+      "fp": 1,
+      "fn": 0,
       "auc": 0.0
     }
   },
   "holdout_site_calibrated": {
     "dataset3_test": {
       "clips": 194,
-      "accuracy": 0.7628865979381443,
-      "recall": 0.022727272727272728,
-      "fp": 3,
-      "fn": 43,
-      "auc": 0.5027272727272727
+      "accuracy": 0.5567010309278351,
+      "recall": 0.25,
+      "fp": 53,
+      "fn": 33,
+      "auc": 0.40272727272727266
     },
     "dataset1_holdout": {
       "clips": 36,
-      "accuracy": 0.8055555555555556,
-      "recall": 0.7222222222222222,
+      "accuracy": 0.7777777777777778,
+      "recall": 0.6666666666666666,
       "fp": 2,
-      "fn": 5,
+      "fn": 6,
       "auc": 0.8796296296296297
     },
     "dataset2_holdout": {
       "clips": 2,
       "accuracy": 0.5,
-      "recall": 0.0,
-      "fp": 0,
-      "fn": 1,
+      "recall": 1.0,
+      "fp": 1,
+      "fn": 0,
       "auc": 0.0
     }
   },
   "training": {
-    "combined": [
-      {
-        "config": "retail_r18m_ft",
-        "oof_clip_auc": {
-          "d1": 0.9174174174174174,
-          "d2": 0.33333333333333337
-        }
-      },
-      {
-        "config": "retail_tiny_m_ft",
-        "oof_clip_auc": {
-          "d1": 0.914039039039039,
-          "d2": 0.11111111111111112
-        }
-      }
+    "datasets": [
+      "dataset-3/Train",
+      "dataset-1 train split",
+      "dataset-2 minus holdout"
     ],
+    "config": {
+      "name": "retail_tiny_m_ft_omar",
+      "backbone": "tiny",
+      "motion": true,
+      "input_size": 64,
+      "epochs": 10,
+      "steps_per_epoch": 300,
+      "batch": 128,
+      "lr": 0.0008,
+      "weight_decay": 0.0005,
+      "dropout": 0.5,
+      "share": [
+        0.0,
+        0.85,
+        0.15
+      ],
+      "d3_frames": 20,
+      "fit_per_label": 1500,
+      "seed": 42,
+      "size": 64,
+      "sources": [
+        "d1",
+        "d2"
+      ],
+      "init_from": "models/candidates/ucf_tiny_original.joblib",
+      "extra": [
+        "omar"
+      ],
+      "extra_share": 0.4
+    },
     "oof_clip_auc": {
-      "d1": 0.9245495495495495,
-      "d2": 0.11111111111111112
+      "d1": 0.9039039039039038,
+      "d2": 0.0,
+      "x:omar": 0.999071951086363
     },
     "oof_clip_acc": {
-      "d1": 0.8698630136986302
+      "d1": 0.863013698630137,
+      "x:omar": 0.9922239502332815
     }
   },
-  "deployed_at": 1790383963.121247,
-  "source": "models/candidates/retail_combo_ft.joblib",
+  "deployed_at": 1790418090.851625,
+  "source": "models/candidates/retail_tiny_m_ft_omar.joblib",
   "slot": "retail"
 }

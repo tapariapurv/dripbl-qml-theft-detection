@@ -124,6 +124,13 @@ CONFIGS = {c.name: c for c in [
     # zero-shot camera test: never sees dataset-2, then scored on all 8 of its videos
     Cfg("retail_tiny_m_ft_d1only", motion=True, epochs=10, steps_per_epoch=200, lr=8e-4, sources=("d1",),
         share=(0.0, 1.0, 0.0), init_from="models/candidates/ucf_tiny_original.joblib"),
+    # + 855 Kaggle retail CCTV videos (omarelg/shoplifting-videos-dataset) as training-data/omar
+    Cfg("retail_tiny_m_ft_omar", motion=True, epochs=10, steps_per_epoch=300, lr=8e-4, sources=("d1", "d2"),
+        share=(0.0, 0.85, 0.15), init_from="models/candidates/ucf_tiny_original.joblib",
+        extra=("omar",), extra_share=0.4),
+    Cfg("retail_r18m_ft_omar", backbone="resnet18", motion=True, input_size=128, lr=1.5e-4, epochs=4,
+        steps_per_epoch=300, sources=("d1", "d2"), share=(0.0, 0.85, 0.15),
+        init_from="models/candidates/cctv_r18.joblib", extra=("omar",), extra_share=0.4),
 ]}
 
 

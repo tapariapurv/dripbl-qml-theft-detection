@@ -1,0 +1,71 @@
+{
+  "configs": [
+    "retail_r18m_ft_omar",
+    "retail_tiny_m_ft_omar"
+  ],
+  "oof_clip_auc": {
+    "d1": 0.8992117117117118,
+    "d2": 0.11111111111111112,
+    "x:omar": 0.9994868435418715
+  },
+  "oof_clip_acc": {
+    "d1": 0.8698630136986302,
+    "x:omar": 0.995334370139969
+  },
+  "site_thresholds": {
+    "default": 0.46662222815222953,
+    "retail": 0.5258750000000001
+  },
+  "holdout": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.5876288659793815,
+      "recall": 0.3181818181818182,
+      "fp": 50,
+      "fn": 30,
+      "auc": 0.48530303030303024
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.8055555555555556,
+      "recall": 0.7777777777777778,
+      "fp": 3,
+      "fn": 4,
+      "auc": 0.8796296296296297
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 1.0,
+      "fp": 1,
+      "fn": 0,
+      "auc": 0.0
+    }
+  },
+  "holdout_site_calibrated": {
+    "dataset3_test": {
+      "clips": 194,
+      "accuracy": 0.5876288659793815,
+      "recall": 0.3181818181818182,
+      "fp": 50,
+      "fn": 30,
+      "auc": 0.48530303030303024
+    },
+    "dataset1_holdout": {
+      "clips": 36,
+      "accuracy": 0.8055555555555556,
+      "recall": 0.7777777777777778,
+      "fp": 3,
+      "fn": 4,
+      "auc": 0.8796296296296297
+    },
+    "dataset2_holdout": {
+      "clips": 2,
+      "accuracy": 0.5,
+      "recall": 1.0,
+      "fp": 1,
+      "fn": 0,
+      "auc": 0.0
+    }
+  }
+}

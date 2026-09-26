@@ -91,6 +91,7 @@ The datasets (~13 GB) are not in this repository. Place them in `training-data/`
 | `dataset-2/videos/*.mp4` | 8 clips from a second store camera |
 | `dataset-3/{Train,Test}/<class>/*.png` | UCF-Crime 64×64 frames, the CCTV benchmark |
 | `dataset-4/` | UCF-Crime source videos and temporal labels |
+| `omar/{normal,theft}/*.mp4` | 855 retail CCTV clips from Kaggle `omarelg/shoplifting-videos-dataset` (`kagglehub.dataset_download`; link `non shop lifters` -> normal, `shop lifters` -> theft) |
 | `<your-site>/{normal,theft}/*.mp4` | your own camera's clips, for `src/add_camera.py` |
 
 ## Working with git
