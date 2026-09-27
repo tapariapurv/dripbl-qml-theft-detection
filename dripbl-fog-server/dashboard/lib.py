@@ -151,6 +151,7 @@ def inject_css() -> None:
 }}
 html, body, [class*="css"], .stMarkdown, .stText, button, input, textarea, select {{ font-family: 'Inter', sans-serif; }}
 .block-container {{ padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1500px; }}
+@media (max-width: 736px) {{ .block-container {{ padding-top: 4rem; }} }}  /* clear Streamlit's mobile header bar */
 [data-testid="stSidebar"] {{ background: #0E1117; border-right: 1px solid var(--border); }}
 h1, h2, h3 {{ letter-spacing: -0.01em; }}
 .mono {{ font-family: 'JetBrains Mono', monospace; }}

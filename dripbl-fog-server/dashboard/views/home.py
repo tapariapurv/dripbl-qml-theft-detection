@@ -97,9 +97,10 @@ with right:
     @st.fragment(run_every=REFRESH)
     def inbox() -> None:
         pending = lib.get("/api/trials", flagged=True, review_status="pending", limit=d["inbox_size"], full=True)
+        n = f"{len(pending)}+" if len(pending) >= d["inbox_size"] else str(len(pending))  # list is capped
         st.html(f'<div style="display:flex;justify-content:space-between;align-items:center">'
                 f'<h5 style="margin:0">Theft alerts</h5>'
-                f'{lib.pill(f"{len(pending)} pending", "alert" if pending else "ok")}</div>')
+                f'{lib.pill(f"{n} pending", "alert" if pending else "ok")}</div>')
         if not pending:
             st.caption("Nothing waiting. When the AI judge flags a trial it appears here for review.")
         for t in pending:
@@ -122,7 +123,7 @@ with right:
                     kind = {"theft": "alert", "not_theft": "ok"}.get(r["verdict"], "warn")
                     c2.html(lib.pill(f"AI: {r['verdict'].replace('_', ' ')} {r.get('confidence', 0):.0%}", kind))
                     c2.caption(r.get("reason", ""))
-                b1, b2, b3, b4 = st.columns(4, gap="small")
+                (b1, b2), (b3, b4) = st.columns(2, gap="small"), st.columns(2, gap="small")  # 4 in a row truncate labels
                 for col, label, status_, icon in ((b1, "Confirm", "confirmed", ":material/check:"),
                                                   (b2, "False", "false_alarm", ":material/close:"),
                                                   (b3, "Dismiss", "dismissed", ":material/archive:")):

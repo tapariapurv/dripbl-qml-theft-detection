@@ -128,6 +128,7 @@ are not re-litigated (all on fixed video-disjoint hold-outs; see `reports/xd_exp
 | transfer: UCF-trained encoder -> fine-tune on retail | retail OOF AUC 0.914 vs 0.879 from scratch | **kept** |
 | ensemble of retail transfer models (combine_experts.py) | retail OOF AUC 0.9245 | superseded below |
 | + 855 Kaggle retail CCTV videos (`training-data/omar`, omarelg/shoplifting-videos-dataset) as an extra site | tiny: d1 hold-out 0.806 (unchanged), omar hold-out **1.000** (old model 0.678, recall 0); r18 and r18+tiny combo no better | **deployed** `retail_tiny_m_ft_omar`: 2 MB vs 230 MB |
+| dataset-6 (UCF Burglary 100 + Normal 150 mp4s) as site `ucf6`, 80/20 split `reports/x_ucf6_split.json`: `cctv_tiny_m_ft_ucf6` | ucf6 hold-out (50 clips) 0.92 vs deployed r18 **0.96**; its d3 Test 0.907 is leaked (all 150 normals + 13 burglaries are d3 Test videos) | not deployed. All of dataset-6 is already in dataset-3, so it adds no new footage |
 | zero-shot on an unseen camera (dataset-2, all 8 videos) | every clip alerts; normal/theft pairs score alike | not solved: scores track the scene. Use `add_camera.py` |
 
 Rules that keep these numbers honest: hold-outs are scored once, after all choices; models are chosen by
